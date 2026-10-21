@@ -47,7 +47,9 @@ app.get('/api/categorias', (req, res) => {
             data: results
         });
     });
-});n
+});
+
+app.use('/api/auth', require('./routes/auth')(db));
 
 // Encender el servidor
 app.listen(PORT, () => {
