@@ -1,6 +1,7 @@
 const express = require('express');
 const mysql = require('mysql2');
 require('dotenv').config();
+const verificarToken = require('./middleware/verificarToken');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,6 +34,8 @@ app.get('/', (req, res) => {
 });
 
 // Endpoint de categorías consultando directo a MySQL
+app.use('/api/categorias', verificarToken);
+
 app.get('/api/categorias', (req, res) => {
     const query = 'SELECT * FROM categorias';
     
@@ -50,6 +53,7 @@ app.get('/api/categorias', (req, res) => {
 });
 
 app.use('/api/auth', require('./routes/auth')(db));
+app.use('/api/reportes', require('./routes/reportes')(db));
 
 // Encender el servidor
 app.listen(PORT, () => {
