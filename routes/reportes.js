@@ -43,7 +43,7 @@ module.exports = (db) => {
 
             const [reportes] = await connection.query(
                 `SELECT r.id, r.titulo, r.descripcion, r.categoria_id, c.nombre AS categoria,
-                        r.usuario_id, u.nombre AS autor, r.creado_en
+                    r.usuario_id, u.nombre AS autor, r.estado, r.creado_en
                  FROM reportes r
                  INNER JOIN categorias c ON c.id = r.categoria_id
                  INNER JOIN usuarios u ON u.id = r.usuario_id
@@ -66,7 +66,7 @@ module.exports = (db) => {
         try {
             const [reportes] = await connection.query(
                 `SELECT r.id, r.titulo, r.descripcion, r.categoria_id, c.nombre AS categoria,
-                        r.usuario_id, u.nombre AS autor, r.creado_en
+                    r.usuario_id, u.nombre AS autor, r.estado, r.creado_en
                  FROM reportes r
                  INNER JOIN categorias c ON c.id = r.categoria_id
                  INNER JOIN usuarios u ON u.id = r.usuario_id
@@ -97,7 +97,7 @@ module.exports = (db) => {
         try {
             const [reportes] = await connection.query(
                 `SELECT r.id, r.titulo, r.descripcion, r.categoria_id, c.nombre AS categoria,
-                        r.usuario_id, u.nombre AS autor, r.creado_en
+                    r.usuario_id, u.nombre AS autor, r.estado, r.creado_en
                  FROM reportes r
                  INNER JOIN categorias c ON c.id = r.categoria_id
                  INNER JOIN usuarios u ON u.id = r.usuario_id
@@ -116,6 +116,45 @@ module.exports = (db) => {
         } catch (error) {
             console.error('Error al obtener el reporte:', error);
             return res.status(500).json({ status: 'error', message: MENSAJE_ERROR_INTERNO });
+        }
+    });
+
+    router.patch('/:id/estado', async (req, res, next) => {
+        const id = Number(req.params.id);
+        const { estado } = req.body || {};
+        const estadosPermitidos = ['pendiente', 'en_proceso', 'resuelto'];
+
+        if (!Number.isInteger(id) || id < 1) {
+            return res.status(400).json({ status: 'error', message: 'El identificador del reporte no es válido' });
+        }
+
+        if (!estadosPermitidos.includes(estado)) {
+            return res.status(400).json({
+                status: 'error',
+                message: `El estado debe ser uno de: ${estadosPermitidos.join(', ')}`
+            });
+        }
+
+        try {
+            const [resultado] = await connection.query(
+                'UPDATE reportes SET estado = ? WHERE id = ?',
+                [estado, id]
+            );
+
+            if (resultado.affectedRows === 0) {
+                const [reportes] = await connection.query(
+                    'SELECT id FROM reportes WHERE id = ? LIMIT 1',
+                    [id]
+                );
+
+                if (reportes.length === 0) {
+                    return res.status(404).json({ status: 'error', message: 'Reporte no encontrado' });
+                }
+            }
+
+            return res.json({ status: 'success', message: 'Estado actualizado', data: { id, estado } });
+        } catch (error) {
+            return next(error);
         }
     });
 

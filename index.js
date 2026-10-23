@@ -2,6 +2,7 @@ const express = require('express');
 const mysql = require('mysql2');
 require('dotenv').config();
 const verificarToken = require('./middleware/verificarToken');
+const manejarErrores = require('./middleware/manejarErrores');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,24 +37,23 @@ app.get('/', (req, res) => {
 // Endpoint de categorías consultando directo a MySQL
 app.use('/api/categorias', verificarToken);
 
-app.get('/api/categorias', (req, res) => {
-    const query = 'SELECT * FROM categorias';
-    
-    db.query(query, (err, results) => {
-        if (err) {
-            return res.status(500).json({ status: 'error', message: err.message });
-        }
-
-        res.json({
-            status: 'success',
-            total: results.length,
-            data: results
-        });
-    });
+app.get('/api/categorias', async (req, res, next) => {
+    try {
+        const [results] = await db.promise().query('SELECT * FROM categorias');
+        return res.json({ status: 'success', total: results.length, data: results });
+    } catch (error) {
+        return next(error);
+    }
 });
 
 app.use('/api/auth', require('./routes/auth')(db));
 app.use('/api/reportes', require('./routes/reportes')(db));
+app.use('/api', require('./routes/comentarios')(db));
+
+app.use((req, res) => {
+    res.status(404).json({ status: 'error', message: 'Ruta no encontrada' });
+});
+app.use(manejarErrores);
 
 // Encender el servidor
 app.listen(PORT, () => {
