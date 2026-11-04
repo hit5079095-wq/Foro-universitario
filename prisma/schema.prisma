@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Categoria {
+  id       Int       @id @default(autoincrement())
+  nombre   String
+  reportes Reporte[]
+
+  @@map("categorias")
+}
+
+model Usuario {
+  id           Int          @id @default(autoincrement())
+  nombre       String
+  correo       String       @unique(map: "usuarios_correo_unique")
+  passwordHash String       @map("password_hash")
+  creadoEn     DateTime     @default(now()) @map("creado_en")
+  reportes     Reporte[]
+  comentarios  Comentario[]
+
+  @@map("usuarios")
+}
+
+model Reporte {
+  id          Int          @id @default(autoincrement())
+  titulo      String
+  descripcion String
+  categoriaId Int          @map("categoria_id")
+  usuarioId   Int          @map("usuario_id")
+  // Valores permitidos: pendiente, en_proceso, resuelto.
+  estado      String       @default("pendiente")
+  creadoEn    DateTime     @default(now()) @map("creado_en")
+  categoria   Categoria    @relation(fields: [categoriaId], references: [id])
+  usuario     Usuario      @relation(fields: [usuarioId], references: [id])
+  comentarios Comentario[]
+
+  @@index([categoriaId], map: "reportes_categoria_id_idx")
+  @@index([usuarioId], map: "reportes_usuario_id_idx")
+  @@index([creadoEn], map: "reportes_creado_en_idx")
+  @@map("reportes")
+}
+
+model Comentario {
+  id        Int      @id @default(autoincrement())
+  reporteId Int      @map("reporte_id")
+  usuarioId Int      @map("usuario_id")
+  contenido String
+  creadoEn  DateTime @default(now()) @map("creado_en")
+  reporte   Reporte  @relation(fields: [reporteId], references: [id], onDelete: Cascade)
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([reporteId, creadoEn], map: "comentarios_reporte_id_creado_en_idx")
+  @@index([usuarioId], map: "comentarios_usuario_id_idx")
+  @@map("comentarios")
+}

@@ -1,9 +1,8 @@
 const express = require('express');
 const verificarToken = require('../middleware/verificarToken');
 
-module.exports = (db) => {
+module.exports = (prisma) => {
     const router = express.Router();
-    const connection = db.promise();
 
     router.use(verificarToken);
 
@@ -23,32 +22,28 @@ module.exports = (db) => {
         }
 
         try {
-            const [reportes] = await connection.query(
-                'SELECT id FROM reportes WHERE id = ? LIMIT 1',
-                [reporteId]
-            );
+            const reporte = await prisma.reporte.findUnique({
+                where: { id: reporteId },
+                select: { id: true }
+            });
 
-            if (reportes.length === 0) {
+            if (!reporte) {
                 return res.status(404).json({ status: 'error', message: 'Reporte no encontrado' });
             }
 
-            const [resultado] = await connection.query(
-                'INSERT INTO comentarios (reporte_id, usuario_id, contenido) VALUES (?, ?, ?)',
-                [reporteId, req.usuario.id, contenido.trim()]
-            );
-
-            const [comentarios] = await connection.query(
-                `SELECT c.id, c.reporte_id, c.usuario_id, u.nombre AS autor, c.contenido, c.creado_en
-                 FROM comentarios c
-                 INNER JOIN usuarios u ON u.id = c.usuario_id
-                 WHERE c.id = ? LIMIT 1`,
-                [resultado.insertId]
-            );
+            const comentario = await prisma.comentario.create({
+                data: {
+                    reporteId,
+                    usuarioId: Number(req.usuario.id),
+                    contenido: contenido.trim()
+                },
+                include: { usuario: { select: { nombre: true } } }
+            });
 
             return res.status(201).json({
                 status: 'success',
                 message: 'Comentario creado',
-                data: comentarios[0]
+                data: serializarComentario(comentario)
             });
         } catch (error) {
             return next(error);
@@ -63,25 +58,26 @@ module.exports = (db) => {
         }
 
         try {
-            const [reportes] = await connection.query(
-                'SELECT id FROM reportes WHERE id = ? LIMIT 1',
-                [reporteId]
-            );
+            const reporte = await prisma.reporte.findUnique({
+                where: { id: reporteId },
+                select: { id: true }
+            });
 
-            if (reportes.length === 0) {
+            if (!reporte) {
                 return res.status(404).json({ status: 'error', message: 'Reporte no encontrado' });
             }
 
-            const [comentarios] = await connection.query(
-                `SELECT c.id, c.reporte_id, c.usuario_id, u.nombre AS autor, c.contenido, c.creado_en
-                 FROM comentarios c
-                 INNER JOIN usuarios u ON u.id = c.usuario_id
-                 WHERE c.reporte_id = ?
-                 ORDER BY c.creado_en ASC, c.id ASC`,
-                [reporteId]
-            );
+            const comentarios = await prisma.comentario.findMany({
+                where: { reporteId },
+                include: { usuario: { select: { nombre: true } } },
+                orderBy: [{ creadoEn: 'asc' }, { id: 'asc' }]
+            });
 
-            return res.json({ status: 'success', total: comentarios.length, data: comentarios });
+            return res.json({
+                status: 'success',
+                total: comentarios.length,
+                data: comentarios.map(serializarComentario)
+            });
         } catch (error) {
             return next(error);
         }
@@ -95,23 +91,22 @@ module.exports = (db) => {
         }
 
         try {
-            const [comentarios] = await connection.query(
-                'SELECT usuario_id FROM comentarios WHERE id = ? LIMIT 1',
-                [comentarioId]
-            );
+            const comentario = await prisma.comentario.findUnique({
+                where: { id: comentarioId },
+                select: { usuarioId: true }
+            });
 
-            if (comentarios.length === 0) {
+            if (!comentario) {
                 return res.status(404).json({ status: 'error', message: 'Comentario no encontrado' });
             }
 
-            if (String(comentarios[0].usuario_id) !== String(req.usuario.id)) {
+            if (String(comentario.usuarioId) !== String(req.usuario.id)) {
                 return res.status(403).json({ status: 'error', message: 'No puedes eliminar un comentario ajeno' });
             }
 
-            await connection.query(
-                'DELETE FROM comentarios WHERE id = ? AND usuario_id = ?',
-                [comentarioId, req.usuario.id]
-            );
+            await prisma.comentario.deleteMany({
+                where: { id: comentarioId, usuarioId: comentario.usuarioId }
+            });
 
             return res.json({ status: 'success', message: 'Comentario eliminado' });
         } catch (error) {
@@ -121,3 +116,14 @@ module.exports = (db) => {
 
     return router;
 };
+
+function serializarComentario(comentario) {
+    return {
+        id: comentario.id,
+        reporte_id: comentario.reporteId,
+        usuario_id: comentario.usuarioId,
+        autor: comentario.usuario.nombre,
+        contenido: comentario.contenido,
+        creado_en: comentario.creadoEn
+    };
+}

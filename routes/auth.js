@@ -6,9 +6,8 @@ const verificarToken = require('../middleware/verificarToken');
 const MENSAJE_ERROR_INTERNO = 'Error interno del servidor';
 const MENSAJE_CREDENCIALES_INVALIDAS = 'Correo o contraseña incorrectos';
 
-module.exports = (db) => {
+module.exports = (prisma) => {
     const router = express.Router();
-    const connection = db.promise();
 
     router.post('/registro', async (req, res) => {
         const { nombre, correo, password } = req.body || {};
@@ -28,35 +27,27 @@ module.exports = (db) => {
         const correoNormalizado = correo.trim();
 
         try {
-            const [usuariosExistentes] = await connection.query(
-                'SELECT id FROM usuarios WHERE correo = ? LIMIT 1',
-                [correoNormalizado]
-            );
-
-            if (usuariosExistentes.length > 0) {
-                return res.status(409).json({
-                    status: 'error',
-                    message: 'El correo ya está registrado'
-                });
-            }
-
             const passwordHash = await bcrypt.hash(password, 10);
-            const [resultado] = await connection.query(
-                'INSERT INTO usuarios (nombre, correo, password_hash) VALUES (?, ?, ?)',
-                [nombreNormalizado, correoNormalizado, passwordHash]
-            );
+            const usuario = await prisma.usuario.create({
+                data: {
+                    nombre: nombreNormalizado,
+                    correo: correoNormalizado,
+                    passwordHash
+                },
+                select: { id: true }
+            });
 
             return res.status(201).json({
                 status: 'success',
                 message: 'Usuario registrado',
                 data: {
-                    id: resultado.insertId,
+                    id: usuario.id,
                     nombre: nombreNormalizado,
                     correo: correoNormalizado
                 }
             });
         } catch (error) {
-            if (error.code === 'ER_DUP_ENTRY') {
+            if (error.code === 'P2002') {
                 return res.status(409).json({
                     status: 'error',
                     message: 'El correo ya está registrado'
@@ -80,20 +71,18 @@ module.exports = (db) => {
         }
 
         try {
-            const [usuarios] = await connection.query(
-                'SELECT id, nombre, correo, password_hash FROM usuarios WHERE correo = ? LIMIT 1',
-                [correo.trim()]
-            );
+            const usuario = await prisma.usuario.findUnique({
+                where: { correo: correo.trim() }
+            });
 
-            if (usuarios.length === 0) {
+            if (!usuario) {
                 return res.status(401).json({
                     status: 'error',
                     message: MENSAJE_CREDENCIALES_INVALIDAS
                 });
             }
 
-            const usuario = usuarios[0];
-            const passwordValida = await bcrypt.compare(password, usuario.password_hash);
+            const passwordValida = await bcrypt.compare(password, usuario.passwordHash);
 
             if (!passwordValida) {
                 return res.status(401).json({
@@ -125,19 +114,27 @@ module.exports = (db) => {
 
     router.get('/perfil', verificarToken, async (req, res) => {
         try {
-            const [usuarios] = await connection.query(
-                'SELECT id, nombre, correo, creado_en FROM usuarios WHERE id = ? LIMIT 1',
-                [req.usuario.id]
-            );
+            const usuario = await prisma.usuario.findUnique({
+                where: { id: Number(req.usuario.id) },
+                select: { id: true, nombre: true, correo: true, creadoEn: true }
+            });
 
-            if (usuarios.length === 0) {
+            if (!usuario) {
                 return res.status(404).json({
                     status: 'error',
                     message: 'Usuario no encontrado'
                 });
             }
 
-            return res.json({ status: 'success', data: usuarios[0] });
+            return res.json({
+                status: 'success',
+                data: {
+                    id: usuario.id,
+                    nombre: usuario.nombre,
+                    correo: usuario.correo,
+                    creado_en: usuario.creadoEn
+                }
+            });
         } catch (error) {
             console.error('Error al obtener el perfil:', error);
             return res.status(500).json({ status: 'error', message: MENSAJE_ERROR_INTERNO });

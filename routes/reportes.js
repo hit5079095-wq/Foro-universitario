@@ -3,9 +3,8 @@ const verificarToken = require('../middleware/verificarToken');
 
 const MENSAJE_ERROR_INTERNO = 'Error interno del servidor';
 
-module.exports = (db) => {
+module.exports = (prisma) => {
     const router = express.Router();
-    const connection = db.promise();
 
     router.use(verificarToken);
 
@@ -24,37 +23,35 @@ module.exports = (db) => {
         }
 
         try {
-            const [categorias] = await connection.query(
-                'SELECT id FROM categorias WHERE id = ? LIMIT 1',
-                [categoriaId]
-            );
+            const categoria = await prisma.categoria.findUnique({
+                where: { id: categoriaId },
+                select: { id: true }
+            });
 
-            if (categorias.length === 0) {
+            if (!categoria) {
                 return res.status(400).json({
                     status: 'error',
                     message: 'La categoría indicada no existe'
                 });
             }
 
-            const [resultado] = await connection.query(
-                'INSERT INTO reportes (titulo, descripcion, categoria_id, usuario_id) VALUES (?, ?, ?, ?)',
-                [titulo.trim(), descripcion.trim(), categoriaId, req.usuario.id]
-            );
-
-            const [reportes] = await connection.query(
-                `SELECT r.id, r.titulo, r.descripcion, r.categoria_id, c.nombre AS categoria,
-                    r.usuario_id, u.nombre AS autor, r.estado, r.creado_en
-                 FROM reportes r
-                 INNER JOIN categorias c ON c.id = r.categoria_id
-                 INNER JOIN usuarios u ON u.id = r.usuario_id
-                 WHERE r.id = ? LIMIT 1`,
-                [resultado.insertId]
-            );
+            const reporte = await prisma.reporte.create({
+                data: {
+                    titulo: titulo.trim(),
+                    descripcion: descripcion.trim(),
+                    categoriaId,
+                    usuarioId: Number(req.usuario.id)
+                },
+                include: {
+                    categoria: { select: { nombre: true } },
+                    usuario: { select: { nombre: true } }
+                }
+            });
 
             return res.status(201).json({
                 status: 'success',
                 message: 'Reporte creado',
-                data: reportes[0]
+                data: serializarReporte(reporte)
             });
         } catch (error) {
             console.error('Error al crear reporte:', error);
@@ -64,19 +61,18 @@ module.exports = (db) => {
 
     router.get('/', async (req, res) => {
         try {
-            const [reportes] = await connection.query(
-                `SELECT r.id, r.titulo, r.descripcion, r.categoria_id, c.nombre AS categoria,
-                    r.usuario_id, u.nombre AS autor, r.estado, r.creado_en
-                 FROM reportes r
-                 INNER JOIN categorias c ON c.id = r.categoria_id
-                 INNER JOIN usuarios u ON u.id = r.usuario_id
-                 ORDER BY r.creado_en DESC, r.id DESC`
-            );
+            const reportes = await prisma.reporte.findMany({
+                include: {
+                    categoria: { select: { nombre: true } },
+                    usuario: { select: { nombre: true } }
+                },
+                orderBy: [{ creadoEn: 'desc' }, { id: 'desc' }]
+            });
 
             return res.json({
                 status: 'success',
                 total: reportes.length,
-                data: reportes
+                data: reportes.map(serializarReporte)
             });
         } catch (error) {
             console.error('Error al listar reportes:', error);
@@ -95,24 +91,22 @@ module.exports = (db) => {
         }
 
         try {
-            const [reportes] = await connection.query(
-                `SELECT r.id, r.titulo, r.descripcion, r.categoria_id, c.nombre AS categoria,
-                    r.usuario_id, u.nombre AS autor, r.estado, r.creado_en
-                 FROM reportes r
-                 INNER JOIN categorias c ON c.id = r.categoria_id
-                 INNER JOIN usuarios u ON u.id = r.usuario_id
-                 WHERE r.id = ? LIMIT 1`,
-                [id]
-            );
+            const reporte = await prisma.reporte.findUnique({
+                where: { id },
+                include: {
+                    categoria: { select: { nombre: true } },
+                    usuario: { select: { nombre: true } }
+                }
+            });
 
-            if (reportes.length === 0) {
+            if (!reporte) {
                 return res.status(404).json({
                     status: 'error',
                     message: 'Reporte no encontrado'
                 });
             }
 
-            return res.json({ status: 'success', data: reportes[0] });
+            return res.json({ status: 'success', data: serializarReporte(reporte) });
         } catch (error) {
             console.error('Error al obtener el reporte:', error);
             return res.status(500).json({ status: 'error', message: MENSAJE_ERROR_INTERNO });
@@ -136,20 +130,13 @@ module.exports = (db) => {
         }
 
         try {
-            const [resultado] = await connection.query(
-                'UPDATE reportes SET estado = ? WHERE id = ?',
-                [estado, id]
-            );
+            const resultado = await prisma.reporte.updateMany({
+                where: { id },
+                data: { estado }
+            });
 
-            if (resultado.affectedRows === 0) {
-                const [reportes] = await connection.query(
-                    'SELECT id FROM reportes WHERE id = ? LIMIT 1',
-                    [id]
-                );
-
-                if (reportes.length === 0) {
-                    return res.status(404).json({ status: 'error', message: 'Reporte no encontrado' });
-                }
+            if (resultado.count === 0) {
+                return res.status(404).json({ status: 'error', message: 'Reporte no encontrado' });
             }
 
             return res.json({ status: 'success', message: 'Estado actualizado', data: { id, estado } });
@@ -160,3 +147,17 @@ module.exports = (db) => {
 
     return router;
 };
+
+function serializarReporte(reporte) {
+    return {
+        id: reporte.id,
+        titulo: reporte.titulo,
+        descripcion: reporte.descripcion,
+        categoria_id: reporte.categoriaId,
+        categoria: reporte.categoria.nombre,
+        usuario_id: reporte.usuarioId,
+        autor: reporte.usuario.nombre,
+        estado: reporte.estado,
+        creado_en: reporte.creadoEn
+    };
+}
