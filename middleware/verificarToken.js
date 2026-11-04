@@ -17,7 +17,8 @@ module.exports = (req, res, next) => {
         if (
             typeof payload !== 'object' ||
             payload === null ||
-            payload.id === undefined ||
+            !Number.isSafeInteger(payload.id) ||
+            payload.id < 1 ||
             typeof payload.nombre !== 'string'
         ) {
             return res.status(401).json({

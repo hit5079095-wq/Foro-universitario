@@ -15,6 +15,7 @@ Backend Node.js para reportes de problemas del campus.
    - `DIRECT_URL`: URL directa de PostgreSQL (puerto `5432`), usada por Prisma para tareas de administración del esquema.
    - Reemplaza `[REF]`, `[PASSWORD]` y `[REGION]` de `.env.example` por los valores de tu proyecto. Si la contraseña contiene caracteres especiales, codifícala para una URL.
    - Define también `JWT_SECRET` con un valor secreto propio. No compartas ni subas `.env` al repositorio.
+   - Completa `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` y `SUPABASE_JWKS_URL` desde la configuración de API Keys de tu proyecto. Mantén `SUPABASE_SECRET_KEY` únicamente en el backend; no la publiques ni la uses en el cliente.
 
 3. Desde la raíz del proyecto, instala las dependencias y configura la base compartida:
 

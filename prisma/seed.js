@@ -1,6 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 const categorias = [
     { id: 1, nombre: 'Mantenimiento de mesas y sillas' },

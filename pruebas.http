@@ -1,0 +1,86 @@
+@baseUrl = http://localhost:3000
+@token = REEMPLAZAR_CON_TOKEN
+@reporteId = 1
+@comentarioId = 1
+
+### Registrar usuario
+POST {{baseUrl}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "nombre": "Estudiante de prueba",
+  "correo": "estudiante@example.com",
+  "password": "ClaveSegura123"
+}
+
+### Iniciar sesión
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "estudiante@example.com",
+  "password": "ClaveSegura123"
+}
+
+### Consultar perfil autenticado
+GET {{baseUrl}}/api/auth/perfil
+Authorization: Bearer {{token}}
+
+### Listar categorías
+GET {{baseUrl}}/api/categorias
+
+### Listar reportes con filtros y paginación
+GET {{baseUrl}}/api/reportes?categoriaId=1&estado=pendiente&pagina=1&limite=10
+
+### Consultar detalle de reporte y comentarios
+GET {{baseUrl}}/api/reportes/{{reporteId}}
+
+### Crear reporte
+POST {{baseUrl}}/api/reportes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "titulo": "Mesa dañada en el aula",
+  "descripcion": "Una mesa tiene una pata rota.",
+  "categoriaId": 1
+}
+
+### Editar reporte propio
+PUT {{baseUrl}}/api/reportes/{{reporteId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "titulo": "Mesa dañada en el aula 101",
+  "descripcion": "La mesa sigue rota y requiere reparación."
+}
+
+### Cambiar estado del reporte
+PATCH {{baseUrl}}/api/reportes/{{reporteId}}/estado
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "estado": "en_proceso"
+}
+
+### Eliminar reporte propio
+DELETE {{baseUrl}}/api/reportes/{{reporteId}}
+Authorization: Bearer {{token}}
+
+### Agregar comentario
+POST {{baseUrl}}/api/reportes/{{reporteId}}/comentarios
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "contenido": "Ya se notificó a mantenimiento."
+}
+
+### Listar comentarios del reporte
+GET {{baseUrl}}/api/reportes/{{reporteId}}/comentarios
+
+### Eliminar comentario propio
+DELETE {{baseUrl}}/api/comentarios/{{comentarioId}}
+Authorization: Bearer {{token}}
