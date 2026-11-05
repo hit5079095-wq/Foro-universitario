@@ -2,6 +2,7 @@ const prisma = require('../lib/prisma');
 const { obtenerIdPositivo, responderIdInvalido } = require('./validaciones');
 
 const ESTADOS_PERMITIDOS = ['pendiente', 'en_proceso', 'resuelto'];
+const ORDENAMIENTOS = ['recientes', 'antiguos', 'mas_comentados'];
 
 const relacionesReporte = {
     categoria: { select: { id: true, nombre: true } },
@@ -25,11 +26,26 @@ function serializarReporte(reporte) {
 }
 
 async function listar(req, res, next) {
+    return listarConFiltro(req, res, next, {});
+}
+
+async function listarPorUsuario(req, res, next, idUsuario) {
+    const usuarioId = idUsuario || obtenerIdPositivo(req.params.id);
+    if (!usuarioId) return responderIdInvalido(res, 'del usuario');
+    return listarConFiltro(req, res, next, { usuarioId });
+}
+
+async function listarConFiltro(req, res, next, filtroExtra) {
     const pagina = req.query.pagina === undefined ? 1 : obtenerIdPositivo(req.query.pagina);
     const limite = req.query.limite === undefined ? 10 : obtenerIdPositivo(req.query.limite);
     const categoriaId = req.query.categoriaId === undefined
         ? undefined
         : obtenerIdPositivo(req.query.categoriaId);
+    const usuarioId = req.query.usuarioId === undefined
+        ? undefined
+        : obtenerIdPositivo(req.query.usuarioId);
+    const q = req.query.q;
+    const orden = req.query.orden === undefined ? 'recientes' : req.query.orden;
 
     if (!pagina || !limite || !Number.isSafeInteger((pagina - 1) * limite)) {
         return res.status(400).json({
@@ -41,6 +57,18 @@ async function listar(req, res, next) {
     if (req.query.categoriaId !== undefined && !categoriaId) {
         return res.status(400).json({ status: 'error', message: 'El identificador de categoría no es válido' });
     }
+    if (req.query.usuarioId !== undefined && !usuarioId) {
+        return res.status(400).json({ status: 'error', message: 'El identificador de usuario no es válido' });
+    }
+    if (q !== undefined && typeof q !== 'string') {
+        return res.status(400).json({ status: 'error', message: 'El parámetro q debe ser texto' });
+    }
+    if (!ORDENAMIENTOS.includes(orden)) {
+        return res.status(400).json({
+            status: 'error',
+            message: `El orden debe ser uno de: ${ORDENAMIENTOS.join(', ')}`
+        });
+    }
 
     if (req.query.estado !== undefined && !ESTADOS_PERMITIDOS.includes(req.query.estado)) {
         return res.status(400).json({
@@ -51,8 +79,21 @@ async function listar(req, res, next) {
 
     const where = {
         ...(categoriaId === undefined ? {} : { categoriaId }),
-        ...(req.query.estado === undefined ? {} : { estado: req.query.estado })
+        ...(usuarioId === undefined ? {} : { usuarioId }),
+        ...(req.query.estado === undefined ? {} : { estado: req.query.estado }),
+        ...(q === undefined || !q.trim() ? {} : {
+            OR: [
+                { titulo: { contains: q.trim(), mode: 'insensitive' } },
+                { descripcion: { contains: q.trim(), mode: 'insensitive' } }
+            ]
+        }),
+        ...filtroExtra
     };
+    const orderBy = orden === 'antiguos'
+        ? [{ creadoEn: 'asc' }, { id: 'asc' }]
+        : orden === 'mas_comentados'
+            ? [{ comentarios: { _count: 'desc' } }, { creadoEn: 'desc' }, { id: 'desc' }]
+            : [{ creadoEn: 'desc' }, { id: 'desc' }];
 
     try {
         const [total, reportes] = await prisma.$transaction([
@@ -60,7 +101,7 @@ async function listar(req, res, next) {
             prisma.reporte.findMany({
                 where,
                 include: relacionesReporte,
-                orderBy: [{ creadoEn: 'desc' }, { id: 'desc' }],
+                orderBy,
                 skip: (pagina - 1) * limite,
                 take: limite
             })
@@ -68,6 +109,7 @@ async function listar(req, res, next) {
 
         return res.json({
             status: 'success',
+            message: 'Reportes obtenidos',
             total,
             pagina,
             limite,
@@ -101,6 +143,7 @@ async function obtener(req, res, next) {
 
         return res.json({
             status: 'success',
+            message: 'Reporte obtenido',
             data: {
                 ...serializarReporte(reporte),
                 comentarios: reporte.comentarios.map((comentario) => ({
@@ -122,12 +165,12 @@ async function crear(req, res, next) {
     const { titulo, descripcion, categoriaId } = req.body || {};
     const idCategoria = Number.isSafeInteger(categoriaId) ? categoriaId : null;
 
-    if (typeof titulo !== 'string' || !titulo.trim() || titulo.trim().length > 150 ||
-        typeof descripcion !== 'string' || !descripcion.trim() ||
+    if (typeof titulo !== 'string' || titulo.trim().length < 5 || titulo.trim().length > 120 ||
+        typeof descripcion !== 'string' || descripcion.trim().length < 10 || descripcion.trim().length > 1000 ||
         !idCategoria || idCategoria < 1) {
         return res.status(400).json({
             status: 'error',
-            message: 'Título (máximo 150 caracteres), descripción y una categoría válida son obligatorios'
+            message: 'Título (5 a 120 caracteres), descripción (10 a 1000 caracteres) y una categoría válida son obligatorios'
         });
     }
 
@@ -166,11 +209,11 @@ async function editar(req, res, next) {
     if (!id) return responderIdInvalido(res, 'del reporte');
 
     const { titulo, descripcion } = req.body || {};
-    if (typeof titulo !== 'string' || !titulo.trim() || titulo.trim().length > 150 ||
-        typeof descripcion !== 'string' || !descripcion.trim()) {
+    if (typeof titulo !== 'string' || titulo.trim().length < 5 || titulo.trim().length > 120 ||
+        typeof descripcion !== 'string' || descripcion.trim().length < 10 || descripcion.trim().length > 1000) {
         return res.status(400).json({
             status: 'error',
-            message: 'Título (máximo 150 caracteres) y descripción son obligatorios'
+            message: 'Título (5 a 120 caracteres) y descripción (10 a 1000 caracteres) son obligatorios'
         });
     }
 
@@ -239,7 +282,7 @@ async function eliminar(req, res, next) {
             });
 
             if (!reporte) return { tipo: 'no-encontrado' };
-            if (reporte.usuarioId !== req.usuario.id) return { tipo: 'prohibido' };
+            if (reporte.usuarioId !== req.usuario.id && req.usuario.rol !== 'admin') return { tipo: 'prohibido' };
 
             await tx.comentario.deleteMany({ where: { reporteId: id } });
             await tx.reporte.delete({ where: { id } });
@@ -253,10 +296,10 @@ async function eliminar(req, res, next) {
             return res.status(403).json({ status: 'error', message: 'No puedes eliminar un reporte ajeno' });
         }
 
-        return res.json({ status: 'success', message: 'Reporte eliminado' });
+        return res.json({ status: 'success', message: 'Reporte eliminado', data: null });
     } catch (error) {
         return next(error);
     }
 }
 
-module.exports = { listar, obtener, crear, editar, actualizarEstado, eliminar };
+module.exports = { listar, listarPorUsuario, obtener, crear, editar, actualizarEstado, eliminar };

@@ -6,10 +6,10 @@ async function crear(req, res, next) {
     if (!reporteId) return responderIdInvalido(res, 'del reporte');
 
     const { contenido } = req.body || {};
-    if (typeof contenido !== 'string' || !contenido.trim() || contenido.trim().length > 5000) {
+    if (typeof contenido !== 'string' || !contenido.trim() || contenido.trim().length > 500) {
         return res.status(400).json({
             status: 'error',
-            message: 'El comentario es obligatorio y no puede superar los 5000 caracteres'
+            message: 'El comentario debe tener entre 1 y 500 caracteres'
         });
     }
 
@@ -54,15 +54,65 @@ async function listarPorReporte(req, res, next) {
             return res.status(404).json({ status: 'error', message: 'Reporte no encontrado' });
         }
 
-        const comentarios = await prisma.comentario.findMany({
-            where: { reporteId },
-            include: { usuario: { select: { nombre: true } } },
-            orderBy: [{ creadoEn: 'asc' }, { id: 'asc' }]
+        const pagina = req.query.pagina === undefined ? 1 : obtenerIdPositivo(req.query.pagina);
+        const limite = req.query.limite === undefined ? 10 : obtenerIdPositivo(req.query.limite);
+        if (!pagina || !limite || !Number.isSafeInteger((pagina - 1) * limite)) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'La página y el límite deben ser enteros positivos y estar dentro del rango permitido'
+            });
+        }
+
+        const [total, comentarios] = await prisma.$transaction([
+            prisma.comentario.count({ where: { reporteId } }),
+            prisma.comentario.findMany({
+                where: { reporteId },
+                include: { usuario: { select: { nombre: true } } },
+                orderBy: [{ creadoEn: 'asc' }, { id: 'asc' }],
+                skip: (pagina - 1) * limite,
+                take: limite
+            })
+        ]);
+        return res.json({
+            status: 'success',
+            message: 'Comentarios obtenidos',
+            total,
+            pagina,
+            limite,
+            totalPaginas: Math.ceil(total / limite),
+            data: comentarios.map(serializarComentario)
+        });
+    } catch (error) {
+        return next(error);
+    }
+}
+
+async function editar(req, res, next) {
+    const id = obtenerIdPositivo(req.params.id);
+    if (!id) return responderIdInvalido(res, 'del comentario');
+
+    try {
+        const comentario = await prisma.comentario.findUnique({
+            where: { id },
+            select: { usuarioId: true }
+        });
+
+        if (!comentario) {
+            return res.status(404).json({ status: 'error', message: 'Comentario no encontrado' });
+        }
+        if (comentario.usuarioId !== req.usuario.id) {
+            return res.status(403).json({ status: 'error', message: 'No puedes editar un comentario ajeno' });
+        }
+
+        const actualizado = await prisma.comentario.update({
+            where: { id },
+            data: { contenido: req.body.contenido },
+            include: { usuario: { select: { nombre: true } } }
         });
         return res.json({
             status: 'success',
-            total: comentarios.length,
-            data: comentarios.map(serializarComentario)
+            message: 'Comentario actualizado',
+            data: serializarComentario(actualizado)
         });
     } catch (error) {
         return next(error);
@@ -82,12 +132,12 @@ async function eliminar(req, res, next) {
         if (!comentario) {
             return res.status(404).json({ status: 'error', message: 'Comentario no encontrado' });
         }
-        if (comentario.usuarioId !== req.usuario.id) {
+        if (comentario.usuarioId !== req.usuario.id && req.usuario.rol !== 'admin') {
             return res.status(403).json({ status: 'error', message: 'No puedes eliminar un comentario ajeno' });
         }
 
         await prisma.comentario.delete({ where: { id } });
-        return res.json({ status: 'success', message: 'Comentario eliminado' });
+        return res.json({ status: 'success', message: 'Comentario eliminado', data: null });
     } catch (error) {
         return next(error);
     }
@@ -104,4 +154,4 @@ function serializarComentario(comentario) {
     };
 }
 
-module.exports = { crear, listarPorReporte, eliminar };
+module.exports = { crear, listarPorReporte, editar, eliminar };

@@ -5,6 +5,14 @@ module.exports = (err, req, res, next) => {
         return next(err);
     }
 
+    if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+        return res.status(400).json({
+            status: 'error',
+            message: 'El cuerpo JSON no tiene un formato válido',
+            data: { errores: { body: ['JSON inválido'] } }
+        });
+    }
+
     if (err.code === 'P2025') {
         return res.status(404).json({ status: 'error', message: 'Recurso no encontrado' });
     }

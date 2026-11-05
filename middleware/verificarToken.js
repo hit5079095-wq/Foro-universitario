@@ -27,7 +27,11 @@ module.exports = (req, res, next) => {
             });
         }
 
-        req.usuario = { id: payload.id, nombre: payload.nombre };
+        req.usuario = {
+            id: payload.id,
+            nombre: payload.nombre,
+            rol: payload.rol === 'admin' ? 'admin' : 'estudiante'
+        };
         return next();
     } catch (error) {
         return res.status(401).json({

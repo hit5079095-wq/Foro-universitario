@@ -1,7 +1,10 @@
 @baseUrl = http://localhost:3000
 @token = REEMPLAZAR_CON_TOKEN
+@adminToken = REEMPLAZAR_CON_TOKEN_ADMIN
 @reporteId = 1
 @comentarioId = 1
+@categoriaId = 1
+@usuarioId = 1
 
 ### Registrar usuario
 POST {{baseUrl}}/api/auth/registro
@@ -26,11 +29,56 @@ Content-Type: application/json
 GET {{baseUrl}}/api/auth/perfil
 Authorization: Bearer {{token}}
 
+### Actualizar nombre del perfil
+PUT {{baseUrl}}/api/auth/perfil
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nombre": "Estudiante actualizado"
+}
+
+### Cambiar contraseña
+PUT {{baseUrl}}/api/auth/password
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "passwordActual": "ClaveSegura123",
+  "passwordNueva": "ClaveNueva123"
+}
+
+### Listar mis reportes
+GET {{baseUrl}}/api/auth/mis-reportes?pagina=1&limite=10
+Authorization: Bearer {{token}}
+
 ### Listar categorías
 GET {{baseUrl}}/api/categorias
 
+### Crear categoría (administrador)
+POST {{baseUrl}}/api/categorias
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "nombre": "Laboratorios"
+}
+
+### Editar categoría (administrador)
+PUT {{baseUrl}}/api/categorias/{{categoriaId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "nombre": "Laboratorios y talleres"
+}
+
+### Eliminar categoría (administrador)
+DELETE {{baseUrl}}/api/categorias/{{categoriaId}}
+Authorization: Bearer {{adminToken}}
+
 ### Listar reportes con filtros y paginación
-GET {{baseUrl}}/api/reportes?categoriaId=1&estado=pendiente&pagina=1&limite=10
+GET {{baseUrl}}/api/reportes?categoriaId=1&estado=pendiente&pagina=1&limite=10&q=aula&orden=mas_comentados&usuarioId=1
 
 ### Consultar detalle de reporte y comentarios
 GET {{baseUrl}}/api/reportes/{{reporteId}}
@@ -42,7 +90,7 @@ Content-Type: application/json
 
 {
   "titulo": "Mesa dañada en el aula",
-  "descripcion": "Una mesa tiene una pata rota.",
+  "descripcion": "Una mesa tiene una pata rota y requiere reparación.",
   "categoriaId": 1
 }
 
@@ -56,16 +104,16 @@ Content-Type: application/json
   "descripcion": "La mesa sigue rota y requiere reparación."
 }
 
-### Cambiar estado del reporte
+### Cambiar estado del reporte (administrador)
 PATCH {{baseUrl}}/api/reportes/{{reporteId}}/estado
-Authorization: Bearer {{token}}
+Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
 {
   "estado": "en_proceso"
 }
 
-### Eliminar reporte propio
+### Eliminar reporte propio o moderar como administrador
 DELETE {{baseUrl}}/api/reportes/{{reporteId}}
 Authorization: Bearer {{token}}
 
@@ -78,9 +126,31 @@ Content-Type: application/json
   "contenido": "Ya se notificó a mantenimiento."
 }
 
-### Listar comentarios del reporte
-GET {{baseUrl}}/api/reportes/{{reporteId}}/comentarios
+### Listar comentarios paginados
+GET {{baseUrl}}/api/reportes/{{reporteId}}/comentarios?pagina=1&limite=10
 
-### Eliminar comentario propio
+### Editar comentario propio
+PUT {{baseUrl}}/api/comentarios/{{comentarioId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "contenido": "Actualización: el caso sigue en seguimiento."
+}
+
+### Eliminar comentario propio o moderar como administrador
 DELETE {{baseUrl}}/api/comentarios/{{comentarioId}}
 Authorization: Bearer {{token}}
+
+### Listar usuarios (administrador)
+GET {{baseUrl}}/api/usuarios
+Authorization: Bearer {{adminToken}}
+
+### Reportes de un usuario
+GET {{baseUrl}}/api/usuarios/{{usuarioId}}/reportes?pagina=1&limite=10
+
+### Estadísticas
+GET {{baseUrl}}/api/estadisticas
+
+### Salud de servidor y base de datos
+GET {{baseUrl}}/api/salud

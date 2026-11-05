@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
+const reportesController = require('./reportesController');
 
 const MENSAJE_CREDENCIALES_INVALIDAS = 'Correo o contraseña incorrectos';
 
@@ -10,11 +11,11 @@ async function registro(req, res, next) {
     if (
         typeof nombre !== 'string' || !nombre.trim() ||
         typeof correo !== 'string' || !correo.trim() ||
-        typeof password !== 'string' || password.length < 6
+        typeof password !== 'string' || password.length < 8
     ) {
         return res.status(400).json({
             status: 'error',
-            message: 'Nombre, correo y una contraseña de al menos 6 caracteres son obligatorios'
+            message: 'Nombre, correo válido y una contraseña de al menos 8 caracteres son obligatorios'
         });
     }
 
@@ -24,14 +25,16 @@ async function registro(req, res, next) {
             data: {
                 nombre: nombre.trim(),
                 correo: correo.trim(),
-                passwordHash
+                passwordHash,
+                rol: 'estudiante'
             },
-            select: { id: true, nombre: true, correo: true, creadoEn: true }
+            select: { id: true, nombre: true, correo: true, rol: true, creadoEn: true }
         });
 
         return res.status(201).json({
             status: 'success',
             message: 'Usuario registrado',
+            data: usuario,
             usuario
         });
     } catch (error) {
@@ -77,18 +80,30 @@ async function login(req, res, next) {
         }
 
         const token = jwt.sign(
-            { id: usuario.id, nombre: usuario.nombre },
+            { id: usuario.id, nombre: usuario.nombre, rol: usuario.rol },
             jwtSecret,
             { expiresIn }
         );
 
         return res.json({
             status: 'success',
+            message: 'Inicio de sesión exitoso',
+            data: {
+                token,
+                usuario: {
+                    id: usuario.id,
+                    nombre: usuario.nombre,
+                    correo: usuario.correo,
+                    rol: usuario.rol,
+                    creadoEn: usuario.creadoEn
+                }
+            },
             token,
             usuario: {
                 id: usuario.id,
                 nombre: usuario.nombre,
                 correo: usuario.correo,
+                rol: usuario.rol,
                 creadoEn: usuario.creadoEn
             }
         });
@@ -101,17 +116,66 @@ async function perfil(req, res, next) {
     try {
         const usuario = await prisma.usuario.findUnique({
             where: { id: req.usuario.id },
-            select: { id: true, nombre: true, correo: true, creadoEn: true }
+            select: { id: true, nombre: true, correo: true, rol: true, creadoEn: true }
         });
 
         if (!usuario) {
             return res.status(404).json({ status: 'error', message: 'Usuario no encontrado' });
         }
 
-        return res.json({ status: 'success', usuario });
+        return res.json({ status: 'success', message: 'Perfil obtenido', data: usuario, usuario });
     } catch (error) {
         return next(error);
     }
 }
 
-module.exports = { registro, login, perfil };
+async function editarPerfil(req, res, next) {
+    try {
+        const usuario = await prisma.usuario.update({
+            where: { id: req.usuario.id },
+            data: { nombre: req.body.nombre },
+            select: { id: true, nombre: true, correo: true, rol: true, creadoEn: true }
+        });
+
+        return res.json({
+            status: 'success',
+            message: 'Perfil actualizado',
+            data: usuario
+        });
+    } catch (error) {
+        return next(error);
+    }
+}
+
+async function cambiarPassword(req, res, next) {
+    try {
+        const usuario = await prisma.usuario.findUnique({
+            where: { id: req.usuario.id },
+            select: { passwordHash: true }
+        });
+
+        if (!usuario || !(await bcrypt.compare(req.body.passwordActual, usuario.passwordHash))) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'La contraseña actual es incorrecta',
+                data: { errores: { passwordActual: ['La contraseña actual es incorrecta'] } }
+            });
+        }
+
+        const passwordHash = await bcrypt.hash(req.body.passwordNueva, 10);
+        await prisma.usuario.update({
+            where: { id: req.usuario.id },
+            data: { passwordHash }
+        });
+
+        return res.json({ status: 'success', message: 'Contraseña actualizada', data: null });
+    } catch (error) {
+        return next(error);
+    }
+}
+
+function misReportes(req, res, next) {
+    return reportesController.listarPorUsuario(req, res, next, req.usuario.id);
+}
+
+module.exports = { registro, login, perfil, editarPerfil, cambiarPassword, misReportes };
