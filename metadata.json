@@ -1,0 +1,8 @@
+{
+  "name": "Foro Universitario",
+  "description": "Plataforma oficial del Foro Universitario para la Institución Universitaria Salazar y Herrera: registro de inconformidades, votación por relevancia en tiempo real, categorías y autenticación JWT.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

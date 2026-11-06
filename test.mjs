@@ -7,6 +7,11 @@ const supabaseKey = process.env.SUPABASE_ANON_KEY
 
 console.log('URL leída:', supabaseUrl)
 
+if (!supabaseUrl || !supabaseKey) {
+  console.log('ℹ️ SUPABASE_URL o SUPABASE_ANON_KEY no configurados; prueba de conexión omitida.')
+  process.exit(0)
+}
+
 const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false }
 })

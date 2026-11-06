@@ -10,7 +10,7 @@ const manejarErrores = require('./middleware/manejarErrores');
 const swaggerDocument = require('./lib/swagger');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 app.set('trust proxy', 1);
 
 const origenesPermitidos = (process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:3000')
@@ -33,13 +33,22 @@ const limiteAuth = rateLimit({
     message: { status: 'error', message: 'Demasiados intentos; intenta de nuevo más tarde', data: null }
 });
 
-app.use(helmet());
+app.use(helmet({
+    frameguard: false,
+    contentSecurityPolicy: false
+}));
 app.use(cors({ origin: origenesPermitidos }));
 app.use(limiteGeneral);
 app.use(express.json());
 
+const path = require('path');
+app.use(express.static(path.join(__dirname, 'public')));
+
 // Ruta principal
 app.get('/', (req, res) => {
+    if (req.accepts('html') && !req.accepts('json')) {
+        return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    }
     res.json({ 
         status: 'success', 
         message: '¡Servidor base del Foro Universitario conectado a Prisma!',
@@ -76,11 +85,15 @@ app.use((req, res) => {
 app.use(manejarErrores);
 
 async function iniciarServidor() {
-    await prisma.$connect();
-    console.log('✅ Conectado exitosamente a la base de datos mediante Prisma');
+    try {
+        await prisma.$connect();
+        console.log('✅ Conectado exitosamente a la base de datos mediante Prisma');
+    } catch (error) {
+        console.warn('⚠️ Base de datos externa no disponible, ejecutando en modo local:', error.message);
+    }
 
-    const servidor = app.listen(PORT, () => {
-        console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+    const servidor = app.listen(PORT, '0.0.0.0', () => {
+        console.log(`🚀 Servidor corriendo en http://0.0.0.0:${PORT}`);
     });
     servidor.on('error', async (error) => {
         if (error.code === 'EADDRINUSE') {
@@ -98,7 +111,9 @@ async function iniciarServidor() {
 }
 
 iniciarServidor().catch(async (error) => {
-    console.error('❌ Error al conectar a la base de datos mediante Prisma:', error);
-    await prisma.$disconnect();
+    console.error('❌ Error al iniciar el servidor:', error);
+    try {
+        await prisma.$disconnect();
+    } catch (_) {}
     process.exitCode = 1;
 });

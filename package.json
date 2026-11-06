@@ -4,6 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "dev": "node index.js",
+    "build": "prisma generate",
+    "lint": "node --check index.js",
     "start": "node index.js",
     "test": "node --test",
     "prisma:generate": "prisma generate",
