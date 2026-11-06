@@ -3,9 +3,10 @@ const { z } = require('zod');
 const nombre = z.string({ error: 'El nombre es obligatorio' })
     .trim().min(1, 'El nombre es obligatorio').max(100, 'El nombre no puede superar 100 caracteres');
 const correo = z.string({ error: 'El correo es obligatorio' })
-    .trim().email('Debe ser un correo válido');
+    .trim().toLowerCase().email('Debe ser un correo válido');
 const password = z.string({ error: 'La contraseña es obligatoria' })
-    .min(8, 'La contraseña debe tener al menos 8 caracteres');
+    .min(8, 'La contraseña debe tener al menos 8 caracteres')
+    .max(72, 'La contraseña no puede superar 72 caracteres');
 
 module.exports = {
     registro: z.object({ nombre, correo, password }),
@@ -27,7 +28,7 @@ module.exports = {
         descripcion: z.string({ error: 'La descripción es obligatoria' }).trim()
             .min(10, 'La descripción debe tener entre 10 y 1000 caracteres')
             .max(1000, 'La descripción debe tener entre 10 y 1000 caracteres'),
-        categoriaId: z.number({ error: 'La categoría debe ser un número entero positivo' })
+        categoriaId: z.coerce.number({ error: 'La categoría debe ser un número entero positivo' })
             .int('La categoría debe ser un número entero positivo')
             .positive('La categoría debe ser un número entero positivo')
     }),

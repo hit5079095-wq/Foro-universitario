@@ -98,7 +98,7 @@ async function eliminar(req, res, next) {
         return res.json({ status: 'success', message: 'Categoría eliminada', data: null });
     } catch (error) {
         if (error.code === 'P2003') {
-            return res.status(409).json({
+            return res.status(400).json({
                 status: 'error',
                 message: 'No se puede eliminar la categoría porque tiene reportes asociados',
                 data: null

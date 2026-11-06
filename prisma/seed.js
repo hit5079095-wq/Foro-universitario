@@ -37,6 +37,22 @@ const textosComentarios = [
     '¿Podrían confirmar si el problema continúa?'
 ];
 
+async function asegurarUsuario({ nombre, correo, password, rol }) {
+    const existente = await prisma.usuario.findUnique({
+        where: { correo },
+        select: { passwordHash: true }
+    });
+    const passwordHash = existente && await bcrypt.compare(password, existente.passwordHash)
+        ? existente.passwordHash
+        : await bcrypt.hash(password, 10);
+
+    return prisma.usuario.upsert({
+        where: { correo },
+        update: { nombre, rol, passwordHash },
+        create: { nombre, correo, passwordHash, rol }
+    });
+}
+
 async function main() {
     if (!process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD.length < 8) {
         throw new Error('Configura ADMIN_PASSWORD con al menos 8 caracteres antes de ejecutar el seed');
@@ -51,30 +67,18 @@ async function main() {
         });
     }
 
-    const adminHash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 10);
-    await prisma.usuario.upsert({
-        where: { correo: 'admin@foro.com' },
-        update: { nombre: 'Administrador Demo', rol: 'admin', passwordHash: adminHash },
-        create: {
-            nombre: 'Administrador Demo',
-            correo: 'admin@foro.com',
-            passwordHash: adminHash,
-            rol: 'admin'
-        }
+    await asegurarUsuario({
+        nombre: 'Administrador Demo',
+        correo: 'admin@foro.com',
+        password: process.env.ADMIN_PASSWORD,
+        rol: 'admin'
     });
 
     const estudiantesPorCorreo = {};
     for (const estudiante of estudiantes) {
-        const passwordHash = await bcrypt.hash(estudiante.password, 10);
-        estudiantesPorCorreo[estudiante.correo] = await prisma.usuario.upsert({
-            where: { correo: estudiante.correo },
-            update: { nombre: estudiante.nombre, rol: 'estudiante', passwordHash },
-            create: {
-                nombre: estudiante.nombre,
-                correo: estudiante.correo,
-                passwordHash,
-                rol: 'estudiante'
-            }
+        estudiantesPorCorreo[estudiante.correo] = await asegurarUsuario({
+            ...estudiante,
+            rol: 'estudiante'
         });
     }
 

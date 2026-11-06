@@ -11,6 +11,7 @@ const swaggerDocument = require('./lib/swagger');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+app.set('trust proxy', 1);
 
 const origenesPermitidos = (process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:3000')
     .split(',')
@@ -21,14 +22,15 @@ const limiteGeneral = rateLimit({
     limit: 200,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
-    message: { status: 'error', message: 'Demasiadas solicitudes; intenta de nuevo más tarde' }
+    message: { status: 'error', message: 'Demasiadas solicitudes; intenta de nuevo más tarde', data: null }
 });
 const limiteAuth = rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: 10,
+    limit: 20,
+    skipSuccessfulRequests: true,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
-    message: { status: 'error', message: 'Demasiados intentos; intenta de nuevo más tarde' }
+    message: { status: 'error', message: 'Demasiados intentos; intenta de nuevo más tarde', data: null }
 });
 
 app.use(helmet());
@@ -69,7 +71,7 @@ app.use('/api/estadisticas', require('./routes/estadisticas'));
 app.use('/api', require('./routes/comentarios'));
 
 app.use((req, res) => {
-    res.status(404).json({ status: 'error', message: 'Ruta no encontrada' });
+    res.status(404).json({ status: 'error', message: 'Ruta no encontrada', data: null });
 });
 app.use(manejarErrores);
 
@@ -77,8 +79,21 @@ async function iniciarServidor() {
     await prisma.$connect();
     console.log('✅ Conectado exitosamente a la base de datos mediante Prisma');
 
-    app.listen(PORT, () => {
+    const servidor = app.listen(PORT, () => {
         console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+    });
+    servidor.on('error', async (error) => {
+        if (error.code === 'EADDRINUSE') {
+            console.error(`❌ El puerto ${PORT} ya está ocupado. Cierra el proceso que lo usa o configura otro valor en PORT.`);
+        } else {
+            console.error(`❌ No se pudo iniciar el servidor en el puerto ${PORT}:`, error);
+        }
+        try {
+            await prisma.$disconnect();
+        } catch (disconnectError) {
+            console.error('❌ No se pudo cerrar la conexión de Prisma:', disconnectError);
+        }
+        process.exitCode = 1;
     });
 }
 

@@ -11,11 +11,12 @@ async function registro(req, res, next) {
     if (
         typeof nombre !== 'string' || !nombre.trim() ||
         typeof correo !== 'string' || !correo.trim() ||
-        typeof password !== 'string' || password.length < 8
+        typeof password !== 'string' || password.length < 8 || password.length > 72
     ) {
         return res.status(400).json({
             status: 'error',
-            message: 'Nombre, correo válido y una contraseña de al menos 8 caracteres son obligatorios'
+            message: 'Nombre, correo válido y una contraseña de 8 a 72 caracteres son obligatorios',
+            data: null
         });
     }
 
@@ -24,7 +25,7 @@ async function registro(req, res, next) {
         const usuario = await prisma.usuario.create({
             data: {
                 nombre: nombre.trim(),
-                correo: correo.trim(),
+                correo: correo.trim().toLowerCase(),
                 passwordHash,
                 rol: 'estudiante'
             },
@@ -41,7 +42,8 @@ async function registro(req, res, next) {
         if (error.code === 'P2002') {
             return res.status(409).json({
                 status: 'error',
-                message: 'El correo ya está registrado'
+                message: 'El correo ya está registrado',
+                data: null
             });
         }
 
@@ -56,19 +58,21 @@ async function login(req, res, next) {
         typeof password !== 'string' || !password) {
         return res.status(401).json({
             status: 'error',
-            message: MENSAJE_CREDENCIALES_INVALIDAS
+            message: MENSAJE_CREDENCIALES_INVALIDAS,
+            data: null
         });
     }
 
     try {
         const usuario = await prisma.usuario.findUnique({
-            where: { correo: correo.trim() }
+            where: { correo: correo.trim().toLowerCase() }
         });
 
         if (!usuario || !(await bcrypt.compare(password, usuario.passwordHash))) {
             return res.status(401).json({
                 status: 'error',
-                message: MENSAJE_CREDENCIALES_INVALIDAS
+                message: MENSAJE_CREDENCIALES_INVALIDAS,
+                data: null
             });
         }
 
@@ -120,7 +124,7 @@ async function perfil(req, res, next) {
         });
 
         if (!usuario) {
-            return res.status(404).json({ status: 'error', message: 'Usuario no encontrado' });
+            return res.status(404).json({ status: 'error', message: 'Usuario no encontrado', data: null });
         }
 
         return res.json({ status: 'success', message: 'Perfil obtenido', data: usuario, usuario });

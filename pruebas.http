@@ -6,22 +6,22 @@
 @categoriaId = 1
 @usuarioId = 1
 
-### Registrar usuario
+### Registrar usuario (el correo se normaliza a minúsculas)
 POST {{baseUrl}}/api/auth/registro
 Content-Type: application/json
 
 {
   "nombre": "Estudiante de prueba",
-  "correo": "estudiante@example.com",
+  "correo": "Estudiante@Example.com",
   "password": "ClaveSegura123"
 }
 
-### Iniciar sesión
+### Iniciar sesión (funciona también con correo en mayúsculas)
 POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
 
 {
-  "correo": "estudiante@example.com",
+  "correo": "ESTUDIANTE@EXAMPLE.COM",
   "password": "ClaveSegura123"
 }
 
@@ -80,10 +80,13 @@ Authorization: Bearer {{adminToken}}
 ### Listar reportes con filtros y paginación
 GET {{baseUrl}}/api/reportes?categoriaId=1&estado=pendiente&pagina=1&limite=10&q=aula&orden=mas_comentados&usuarioId=1
 
+### El límite superior a 50 se ajusta a 50
+GET {{baseUrl}}/api/reportes?pagina=1&limite=100
+
 ### Consultar detalle de reporte y comentarios
 GET {{baseUrl}}/api/reportes/{{reporteId}}
 
-### Crear reporte
+### Crear reporte (categoriaId también acepta "1" de un formulario)
 POST {{baseUrl}}/api/reportes
 Authorization: Bearer {{token}}
 Content-Type: application/json
@@ -91,7 +94,7 @@ Content-Type: application/json
 {
   "titulo": "Mesa dañada en el aula",
   "descripcion": "Una mesa tiene una pata rota y requiere reparación.",
-  "categoriaId": 1
+  "categoriaId": "1"
 }
 
 ### Editar reporte propio
@@ -104,7 +107,7 @@ Content-Type: application/json
   "descripcion": "La mesa sigue rota y requiere reparación."
 }
 
-### Cambiar estado del reporte (administrador)
+### Cambiar estado del reporte (administrador o autor)
 PATCH {{baseUrl}}/api/reportes/{{reporteId}}/estado
 Authorization: Bearer {{adminToken}}
 Content-Type: application/json
@@ -126,8 +129,8 @@ Content-Type: application/json
   "contenido": "Ya se notificó a mantenimiento."
 }
 
-### Listar comentarios paginados
-GET {{baseUrl}}/api/reportes/{{reporteId}}/comentarios?pagina=1&limite=10
+### Listar comentarios; limite=100 debe responder limite=50
+GET {{baseUrl}}/api/reportes/{{reporteId}}/comentarios?pagina=1&limite=100
 
 ### Editar comentario propio
 PUT {{baseUrl}}/api/comentarios/{{comentarioId}}
@@ -142,7 +145,7 @@ Content-Type: application/json
 DELETE {{baseUrl}}/api/comentarios/{{comentarioId}}
 Authorization: Bearer {{token}}
 
-### Listar usuarios (administrador)
+### Listar usuarios (administrador; sin correo ni passwordHash)
 GET {{baseUrl}}/api/usuarios
 Authorization: Bearer {{adminToken}}
 

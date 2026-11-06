@@ -1,5 +1,5 @@
 const prisma = require('../lib/prisma');
-const { obtenerIdPositivo, responderIdInvalido } = require('./validaciones');
+const { obtenerIdPositivo, obtenerLimite, responderIdInvalido } = require('./validaciones');
 
 const ESTADOS_PERMITIDOS = ['pendiente', 'en_proceso', 'resuelto'];
 const ORDENAMIENTOS = ['recientes', 'antiguos', 'mas_comentados'];
@@ -37,7 +37,7 @@ async function listarPorUsuario(req, res, next, idUsuario) {
 
 async function listarConFiltro(req, res, next, filtroExtra) {
     const pagina = req.query.pagina === undefined ? 1 : obtenerIdPositivo(req.query.pagina);
-    const limite = req.query.limite === undefined ? 10 : obtenerIdPositivo(req.query.limite);
+    const limite = obtenerLimite(req.query.limite);
     const categoriaId = req.query.categoriaId === undefined
         ? undefined
         : obtenerIdPositivo(req.query.categoriaId);
@@ -50,30 +50,33 @@ async function listarConFiltro(req, res, next, filtroExtra) {
     if (!pagina || !limite || !Number.isSafeInteger((pagina - 1) * limite)) {
         return res.status(400).json({
             status: 'error',
-            message: 'La página y el límite deben ser enteros positivos y estar dentro del rango permitido'
+            message: 'La página y el límite deben ser enteros positivos y estar dentro del rango permitido',
+            data: null
         });
     }
 
     if (req.query.categoriaId !== undefined && !categoriaId) {
-        return res.status(400).json({ status: 'error', message: 'El identificador de categoría no es válido' });
+        return res.status(400).json({ status: 'error', message: 'El identificador de categoría no es válido', data: null });
     }
     if (req.query.usuarioId !== undefined && !usuarioId) {
-        return res.status(400).json({ status: 'error', message: 'El identificador de usuario no es válido' });
+        return res.status(400).json({ status: 'error', message: 'El identificador de usuario no es válido', data: null });
     }
     if (q !== undefined && typeof q !== 'string') {
-        return res.status(400).json({ status: 'error', message: 'El parámetro q debe ser texto' });
+        return res.status(400).json({ status: 'error', message: 'El parámetro q debe ser texto', data: null });
     }
     if (!ORDENAMIENTOS.includes(orden)) {
         return res.status(400).json({
             status: 'error',
-            message: `El orden debe ser uno de: ${ORDENAMIENTOS.join(', ')}`
+            message: `El orden debe ser uno de: ${ORDENAMIENTOS.join(', ')}`,
+            data: null
         });
     }
 
     if (req.query.estado !== undefined && !ESTADOS_PERMITIDOS.includes(req.query.estado)) {
         return res.status(400).json({
             status: 'error',
-            message: `El estado debe ser uno de: ${ESTADOS_PERMITIDOS.join(', ')}`
+            message: `El estado debe ser uno de: ${ESTADOS_PERMITIDOS.join(', ')}`,
+            data: null
         });
     }
 
@@ -138,7 +141,7 @@ async function obtener(req, res, next) {
         });
 
         if (!reporte) {
-            return res.status(404).json({ status: 'error', message: 'Reporte no encontrado' });
+            return res.status(404).json({ status: 'error', message: 'Reporte no encontrado', data: null });
         }
 
         return res.json({
@@ -170,7 +173,8 @@ async function crear(req, res, next) {
         !idCategoria || idCategoria < 1) {
         return res.status(400).json({
             status: 'error',
-            message: 'Título (5 a 120 caracteres), descripción (10 a 1000 caracteres) y una categoría válida son obligatorios'
+            message: 'Título (5 a 120 caracteres), descripción (10 a 1000 caracteres) y una categoría válida son obligatorios',
+            data: null
         });
     }
 
@@ -181,7 +185,7 @@ async function crear(req, res, next) {
         });
 
         if (!categoria) {
-            return res.status(400).json({ status: 'error', message: 'La categoría indicada no existe' });
+            return res.status(400).json({ status: 'error', message: 'La categoría indicada no existe', data: null });
         }
 
         const reporte = await prisma.reporte.create({
@@ -213,7 +217,8 @@ async function editar(req, res, next) {
         typeof descripcion !== 'string' || descripcion.trim().length < 10 || descripcion.trim().length > 1000) {
         return res.status(400).json({
             status: 'error',
-            message: 'Título (5 a 120 caracteres) y descripción (10 a 1000 caracteres) son obligatorios'
+            message: 'Título (5 a 120 caracteres) y descripción (10 a 1000 caracteres) son obligatorios',
+            data: null
         });
     }
 
@@ -224,10 +229,10 @@ async function editar(req, res, next) {
         });
 
         if (!reporte) {
-            return res.status(404).json({ status: 'error', message: 'Reporte no encontrado' });
+            return res.status(404).json({ status: 'error', message: 'Reporte no encontrado', data: null });
         }
         if (reporte.usuarioId !== req.usuario.id) {
-            return res.status(403).json({ status: 'error', message: 'No puedes editar un reporte ajeno' });
+            return res.status(403).json({ status: 'error', message: 'No puedes editar un reporte ajeno', data: null });
         }
 
         const actualizado = await prisma.reporte.update({
@@ -250,21 +255,39 @@ async function actualizarEstado(req, res, next) {
     if (!ESTADOS_PERMITIDOS.includes(estado)) {
         return res.status(400).json({
             status: 'error',
-            message: `El estado debe ser uno de: ${ESTADOS_PERMITIDOS.join(', ')}`
+            message: `El estado debe ser uno de: ${ESTADOS_PERMITIDOS.join(', ')}`,
+            data: null
         });
     }
 
     try {
-        const resultado = await prisma.reporte.updateMany({
+        const reporteExistente = await prisma.reporte.findUnique({
             where: { id },
-            data: { estado }
+            select: { usuarioId: true }
         });
 
-        if (resultado.count === 0) {
-            return res.status(404).json({ status: 'error', message: 'Reporte no encontrado' });
+        if (!reporteExistente) {
+            return res.status(404).json({ status: 'error', message: 'Reporte no encontrado', data: null });
+        }
+        if (reporteExistente.usuarioId !== req.usuario.id && req.usuario.rol !== 'admin') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'No puedes cambiar el estado de un reporte ajeno',
+                data: null
+            });
         }
 
-        return res.json({ status: 'success', message: 'Estado actualizado', data: { id, estado } });
+        const actualizado = await prisma.reporte.update({
+            where: { id },
+            data: { estado },
+            include: relacionesReporte
+        });
+
+        return res.json({
+            status: 'success',
+            message: 'Estado actualizado',
+            data: serializarReporte(actualizado)
+        });
     } catch (error) {
         return next(error);
     }
@@ -290,10 +313,10 @@ async function eliminar(req, res, next) {
         });
 
         if (resultado.tipo === 'no-encontrado') {
-            return res.status(404).json({ status: 'error', message: 'Reporte no encontrado' });
+            return res.status(404).json({ status: 'error', message: 'Reporte no encontrado', data: null });
         }
         if (resultado.tipo === 'prohibido') {
-            return res.status(403).json({ status: 'error', message: 'No puedes eliminar un reporte ajeno' });
+            return res.status(403).json({ status: 'error', message: 'No puedes eliminar un reporte ajeno', data: null });
         }
 
         return res.json({ status: 'success', message: 'Reporte eliminado', data: null });

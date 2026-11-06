@@ -1,5 +1,5 @@
 const prisma = require('../lib/prisma');
-const { obtenerIdPositivo, responderIdInvalido } = require('./validaciones');
+const { obtenerIdPositivo, obtenerLimite, responderIdInvalido } = require('./validaciones');
 
 async function crear(req, res, next) {
     const reporteId = obtenerIdPositivo(req.params.id);
@@ -9,7 +9,8 @@ async function crear(req, res, next) {
     if (typeof contenido !== 'string' || !contenido.trim() || contenido.trim().length > 500) {
         return res.status(400).json({
             status: 'error',
-            message: 'El comentario debe tener entre 1 y 500 caracteres'
+            message: 'El comentario debe tener entre 1 y 500 caracteres',
+            data: null
         });
     }
 
@@ -19,7 +20,7 @@ async function crear(req, res, next) {
             select: { id: true }
         });
         if (!reporte) {
-            return res.status(404).json({ status: 'error', message: 'Reporte no encontrado' });
+            return res.status(404).json({ status: 'error', message: 'Reporte no encontrado', data: null });
         }
 
         const comentario = await prisma.comentario.create({
@@ -51,15 +52,16 @@ async function listarPorReporte(req, res, next) {
             select: { id: true }
         });
         if (!reporte) {
-            return res.status(404).json({ status: 'error', message: 'Reporte no encontrado' });
+            return res.status(404).json({ status: 'error', message: 'Reporte no encontrado', data: null });
         }
 
         const pagina = req.query.pagina === undefined ? 1 : obtenerIdPositivo(req.query.pagina);
-        const limite = req.query.limite === undefined ? 10 : obtenerIdPositivo(req.query.limite);
+        const limite = obtenerLimite(req.query.limite);
         if (!pagina || !limite || !Number.isSafeInteger((pagina - 1) * limite)) {
             return res.status(400).json({
                 status: 'error',
-                message: 'La página y el límite deben ser enteros positivos y estar dentro del rango permitido'
+                message: 'La página y el límite deben ser enteros positivos y estar dentro del rango permitido',
+                data: null
             });
         }
 
@@ -98,10 +100,10 @@ async function editar(req, res, next) {
         });
 
         if (!comentario) {
-            return res.status(404).json({ status: 'error', message: 'Comentario no encontrado' });
+            return res.status(404).json({ status: 'error', message: 'Comentario no encontrado', data: null });
         }
         if (comentario.usuarioId !== req.usuario.id) {
-            return res.status(403).json({ status: 'error', message: 'No puedes editar un comentario ajeno' });
+            return res.status(403).json({ status: 'error', message: 'No puedes editar un comentario ajeno', data: null });
         }
 
         const actualizado = await prisma.comentario.update({
@@ -130,10 +132,10 @@ async function eliminar(req, res, next) {
         });
 
         if (!comentario) {
-            return res.status(404).json({ status: 'error', message: 'Comentario no encontrado' });
+            return res.status(404).json({ status: 'error', message: 'Comentario no encontrado', data: null });
         }
         if (comentario.usuarioId !== req.usuario.id && req.usuario.rol !== 'admin') {
-            return res.status(403).json({ status: 'error', message: 'No puedes eliminar un comentario ajeno' });
+            return res.status(403).json({ status: 'error', message: 'No puedes eliminar un comentario ajeno', data: null });
         }
 
         await prisma.comentario.delete({ where: { id } });
