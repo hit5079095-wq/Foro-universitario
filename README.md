@@ -1,46 +1,90 @@
-# Foro Universitario - Backend
+# Foro Universitario
 
-API REST para registrar y dar seguimiento a reportes de problemas del campus. Usa Node.js, Express, Prisma 6 y PostgreSQL (Supabase); ofrece autenticación JWT, perfiles, roles de estudiante/administrador, categorías, reportes, comentarios, estadísticas y documentación Swagger.
+Plataforma para registrar y dar seguimiento a reportes de problemas del campus. El repositorio está dividido en dos proyectos:
+
+- **`backend/`**: API REST con Node.js, Express 5, Prisma 6 y PostgreSQL (Supabase). Autenticación JWT, roles estudiante/administrador, categorías, reportes, votos, comentarios, historial de estados, estadísticas y documentación Swagger.
+- **`frontend/`**: interfaz en React 18 + Vite 5 + Tailwind CSS 3.
+
+## Estructura
+
+```
+backend/
+  prisma/              esquema y seed
+  scripts/             utilidades (probar-supabase.mjs)
+  src/
+    server.js          arranque del servidor
+    app.js             configuración de Express (seguridad, rutas, estáticos del frontend)
+    config/            variables de entorno y Swagger
+    database/          cliente Prisma, selección de conexión y datos demo en memoria
+    repositories/      acceso a datos (patrón repository)
+      prisma/          implementación sobre PostgreSQL
+      memoria/         implementación en memoria (sin base de datos)
+    services/          reglas de negocio
+    controllers/       capa HTTP
+    routes/            definición de rutas /api
+    middlewares/       autenticación, roles, validación y errores
+    validators/        esquemas Zod
+    utils/             errores HTTP, paginación, serializadores, permisos
+  test/                pruebas con node:test
+frontend/
+  src/
+    api/               clientes de la API
+    context/           sesión (AuthContext)
+    hooks/             lógica de datos y UI
+    components/        layout, reportes, sidebar, modales y toast
+    utils/             formato de fechas y estados
+```
+
+Flujo de una petición: `routes → middlewares → controllers → services → repositories → Prisma / memoria`. Si no hay `DATABASE_URL` o PostgreSQL no responde, el backend usa automáticamente los repositorios en memoria con datos de demostración (admin `admin@foro.com` / `ADMIN_PASSWORD` o `Admin1234`; estudiantes `ana@foro.com`, `luis@foro.com`, `sofia@foro.com` / `Estudiante123`).
 
 ## Requisitos
 
 - Node.js 20 o posterior y npm.
-- PostgreSQL disponible; se recomienda un proyecto Supabase.
-- Credenciales de conexión para `DATABASE_URL` y `DIRECT_URL`.
-- Una clave privada para `JWT_SECRET` y otra clave de al menos 8 caracteres para `ADMIN_PASSWORD`.
+- PostgreSQL disponible (se recomienda Supabase) con credenciales para `DATABASE_URL` y `DIRECT_URL`. Opcional: sin base de datos se usa el modo en memoria.
+- Una clave privada para `JWT_SECRET` y otra de al menos 8 caracteres para `ADMIN_PASSWORD`.
 
 ## Instalación y ejecución
 
-1. Clona el repositorio y abre una terminal en la carpeta raíz.
-2. Instala los paquetes:
+1. Clona el repositorio y, en la carpeta raíz, instala todo (raíz, backend y frontend):
 
    ```sh
    npm install
    ```
 
-3. Copia `.env.example` como `.env` (en PowerShell: `Copy-Item .env.example .env`) y configura las variables. No publiques `.env`.
-4. Genera el cliente Prisma y sincroniza el esquema:
+2. Copia `backend/.env.example` como `backend/.env` (en PowerShell: `Copy-Item backend/.env.example backend/.env`) y configura las variables. No publiques `.env`.
+3. Genera el cliente Prisma, sincroniza el esquema y carga los datos de demostración:
 
    ```sh
-   npx prisma generate
-   npm run prisma:push
+   npm run build --prefix backend
+   npm run prisma:push --prefix backend
+   npm run prisma:seed --prefix backend
    ```
 
-5. Carga los datos de demostración:
+   El seed necesita `ADMIN_PASSWORD`; crea o actualiza el administrador `admin@foro.com`, tres estudiantes de demostración, categorías, ocho reportes y comentarios. Puede ejecutarse más de una vez sin duplicar registros. Los estudiantes de demostración usan `Estudiante123`.
+
+4. Desarrollo (backend en `:3000` y Vite en `:5173` con proxy de `/api` al backend):
 
    ```sh
-   npm run prisma:seed
+   npm run dev
    ```
 
-   El seed necesita `ADMIN_PASSWORD`; crea o actualiza el administrador `admin@foro.com`, tres estudiantes de demostración, categorías, ocho reportes y comentarios. Puede ejecutarse más de una vez sin duplicar registros ni regenerar hashes si las contraseñas ya coinciden. Los estudiantes de demostración usan `Estudiante123`.
+   Abre `http://localhost:5173`. También puedes levantar cada parte por separado con `npm run dev:backend` y `npm run dev:frontend`.
 
-6. Inicia el servidor:
+5. Producción (Express sirve el build del frontend y la API en el mismo puerto):
 
    ```sh
+   npm run build
    npm start
    ```
 
-La API escucha en `http://localhost:3000`. La interfaz interactiva de Swagger está en `http://localhost:3000/api/docs`.
+   Abre `http://localhost:3000`. Swagger está en `http://localhost:3000/api/docs`.
+
+| Script (raíz) | Acción |
+|---|---|
+| `npm run dev` | Backend + frontend en modo desarrollo. |
+| `npm run build` | `prisma generate` y build de Vite (`frontend/dist`). |
+| `npm start` | Inicia el backend, que sirve también `frontend/dist`. |
+| `npm test` | Pruebas del backend. |
 
 ## Variables de entorno
 
@@ -99,8 +143,8 @@ La lista de reportes acepta `pagina`, `limite`, `categoriaId`, `estado`, `q`, `u
 
 ## Pruebas rápidas
 
-1. Importa `pruebas.http` en VS Code con REST Client o úsalo como referencia para Postman.
-2. Ejecuta `npm test` para las pruebas automatizadas de esquemas y middleware.
+1. Importa `backend/pruebas.http` en VS Code con REST Client o úsalo como referencia para Postman.
+2. Ejecuta `npm test` para las pruebas automatizadas (esquemas, middleware, services, repositorios en memoria y un flujo HTTP completo).
 3. Inicia sesión como admin con `admin@foro.com` y el valor local de `ADMIN_PASSWORD`; usa `data.token` como Bearer token admin. Registra/inicia sesión como estudiante para obtener un segundo token.
 4. Registra un correo mixto como `Ana@x.com` e inicia sesión con `ana@x.com`; debe acceder a la misma cuenta.
 5. Crea/edita un reporte con ubicación e imagen HTTP/HTTPS; filtra con `?ubicacion=aula` y comprueba la coincidencia parcial sin distinguir mayúsculas.
@@ -109,8 +153,8 @@ La lista de reportes acepta `pagina`, `limite`, `categoriaId`, `estado`, `q`, `u
 8. Cambia el rol de otro usuario con admin. Intenta cambiar el propio rol admin a estudiante (403) y prueba el endpoint sin admin (401/403).
 9. Prueba cambiar estado con el token del autor y con el de admin (200 y reporte completo), y con otro estudiante (403).
 10. Comprueba que contraseñas de registro/cambio de más de 72 caracteres y JSON mal formado respondan 400, y que un JWT vencido responda 401 con el código indicado.
-11. Ejecuta `npm run prisma:seed` dos veces y confirma que no duplica datos. Revisa que la lista de usuarios no exponga correo ni `passwordHash`.
+11. Ejecuta `npm run prisma:seed --prefix backend` dos veces y confirma que no duplica datos. Revisa que la lista de usuarios no exponga correo ni `passwordHash`.
 
 ## Notas de esquema
 
-El esquema incluye el rol por defecto `estudiante` y la unicidad del nombre de categoría. `npm run prisma:push` sincroniza los cambios sin generar migraciones SQL versionadas. Antes de sincronizar una base existente, confirma que no tenga nombres de categorías duplicados.
+El esquema incluye el rol por defecto `estudiante` y la unicidad del nombre de categoría. `npm run prisma:push --prefix backend` sincroniza los cambios sin generar migraciones SQL versionadas. Antes de sincronizar una base existente, confirma que no tenga nombres de categorías duplicados.
