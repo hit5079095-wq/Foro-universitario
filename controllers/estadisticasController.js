@@ -18,7 +18,7 @@ async function obtener(req, res, next) {
                     include: {
                         categoria: { select: { id: true, nombre: true } },
                         usuario: { select: { nombre: true } },
-                        _count: { select: { comentarios: true } }
+                        _count: { select: { comentarios: true, votos: true } }
                     },
                     orderBy: [{ creadoEn: 'desc' }, { id: 'desc' }]
                 })
@@ -45,12 +45,16 @@ async function obtener(req, res, next) {
                     titulo: reporte.titulo,
                     descripcion: reporte.descripcion,
                     categoriaId: reporte.categoriaId,
+                    ubicacion: reporte.ubicacion,
+                    imagenUrl: reporte.imagenUrl,
                     categoria: reporte.categoria,
                     usuarioId: reporte.usuarioId,
                     autor: reporte.usuario.nombre,
                     estado: reporte.estado,
                     creadoEn: reporte.creadoEn,
-                    totalComentarios: reporte._count.comentarios
+                    actualizadoEn: reporte.actualizadoEn,
+                    totalComentarios: reporte._count.comentarios,
+                    totalVotos: reporte._count.votos
                 }))
             }
         });

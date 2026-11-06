@@ -7,6 +7,16 @@ const correo = z.string({ error: 'El correo es obligatorio' })
 const password = z.string({ error: 'La contraseña es obligatoria' })
     .min(8, 'La contraseña debe tener al menos 8 caracteres')
     .max(72, 'La contraseña no puede superar 72 caracteres');
+const ubicacion = z.preprocess(
+    (valor) => typeof valor === 'string' && !valor.trim() ? null : valor,
+    z.string().trim().max(100, 'La ubicación no puede superar 100 caracteres').nullable().optional()
+);
+const imagenUrl = z.preprocess(
+    (valor) => typeof valor === 'string' && !valor.trim() ? null : valor,
+    z.string().trim().url('La imagen debe ser una URL válida')
+        .refine((valor) => /^https?:\/\//i.test(valor), 'La imagen debe usar HTTP o HTTPS')
+        .nullable().optional()
+);
 
 module.exports = {
     registro: z.object({ nombre, correo, password }),
@@ -21,6 +31,9 @@ module.exports = {
         passwordNueva: password
     }),
     categoria: z.object({ nombre }),
+    rol: z.object({
+        rol: z.enum(['estudiante', 'admin'], { error: 'El rol debe ser estudiante o admin' })
+    }),
     reporte: z.object({
         titulo: z.string({ error: 'El título es obligatorio' }).trim()
             .min(5, 'El título debe tener entre 5 y 120 caracteres')
@@ -30,7 +43,9 @@ module.exports = {
             .max(1000, 'La descripción debe tener entre 10 y 1000 caracteres'),
         categoriaId: z.coerce.number({ error: 'La categoría debe ser un número entero positivo' })
             .int('La categoría debe ser un número entero positivo')
-            .positive('La categoría debe ser un número entero positivo')
+            .positive('La categoría debe ser un número entero positivo'),
+        ubicacion,
+        imagenUrl
     }),
     editarReporte: z.object({
         titulo: z.string({ error: 'El título es obligatorio' }).trim()
@@ -38,7 +53,9 @@ module.exports = {
             .max(120, 'El título debe tener entre 5 y 120 caracteres'),
         descripcion: z.string({ error: 'La descripción es obligatoria' }).trim()
             .min(10, 'La descripción debe tener entre 10 y 1000 caracteres')
-            .max(1000, 'La descripción debe tener entre 10 y 1000 caracteres')
+            .max(1000, 'La descripción debe tener entre 10 y 1000 caracteres'),
+        ubicacion,
+        imagenUrl
     }),
     comentario: z.object({
         contenido: z.string({ error: 'El contenido es obligatorio' }).trim()

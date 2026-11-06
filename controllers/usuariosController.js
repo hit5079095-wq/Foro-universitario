@@ -37,4 +37,40 @@ async function listarReportes(req, res, next) {
     return reportesController.listarPorUsuario(req, res, next);
 }
 
-module.exports = { listar, listarReportes };
+async function cambiarRol(req, res, next) {
+    const id = obtenerIdPositivo(req.params.id);
+    if (!id) return responderIdInvalido(res, 'del usuario');
+
+    if (id === req.usuario.id && req.body.rol !== 'admin') {
+        return res.status(403).json({
+            status: 'error',
+            message: 'No puedes quitarte tu propio rol de administrador',
+            data: null
+        });
+    }
+
+    try {
+        const usuario = await prisma.usuario.findUnique({
+            where: { id },
+            select: { id: true }
+        });
+        if (!usuario) {
+            return res.status(404).json({ status: 'error', message: 'Usuario no encontrado', data: null });
+        }
+
+        const actualizado = await prisma.usuario.update({
+            where: { id },
+            data: { rol: req.body.rol },
+            select: { id: true, nombre: true, rol: true, creadoEn: true }
+        });
+        return res.json({
+            status: 'success',
+            message: 'Rol de usuario actualizado',
+            data: actualizado
+        });
+    } catch (error) {
+        return next(error);
+    }
+}
+
+module.exports = { listar, listarReportes, cambiarRol };

@@ -21,20 +21,39 @@ const estudiantes = [
 ];
 
 const datosReportes = [
-    { titulo: 'Proyector sin señal en aula 101', descripcion: 'El proyector del aula 101 no recibe señal al conectar una computadora.', categoria: 'Equipos de cómputo y redes', estudiante: 'ana@foro.com', estado: 'pendiente' },
-    { titulo: 'Sillas dañadas en el salón B', descripcion: 'Hay varias sillas con tornillos flojos en el salón B y requieren mantenimiento.', categoria: 'Mantenimiento de mesas y sillas', estudiante: 'luis@foro.com', estado: 'en_proceso' },
-    { titulo: 'Fuga de agua cerca de biblioteca', descripcion: 'Se observa una fuga de agua en el pasillo que conecta con la biblioteca.', categoria: 'Biblioteca', estudiante: 'sofia@foro.com', estado: 'resuelto' },
-    { titulo: 'Luminaria fundida en aula 204', descripcion: 'Una de las luminarias del aula 204 está fundida y el espacio queda oscuro.', categoria: 'Aulas e infraestructura', estudiante: 'ana@foro.com', estado: 'pendiente' },
-    { titulo: 'Limpieza pendiente en baños', descripcion: 'Los baños del edificio central necesitan limpieza y reposición de jabón.', categoria: 'Baños y limpieza', estudiante: 'luis@foro.com', estado: 'en_proceso' },
-    { titulo: 'Red wifi inestable en cafetería', descripcion: 'La conexión wifi se interrumpe con frecuencia en la zona de cafetería.', categoria: 'Equipos de cómputo y redes', estudiante: 'sofia@foro.com', estado: 'pendiente' },
-    { titulo: 'Mesa rota en laboratorio', descripcion: 'Una mesa de trabajo del laboratorio tiene una pata rota y no es segura.', categoria: 'Mantenimiento de mesas y sillas', estudiante: 'ana@foro.com', estado: 'resuelto' },
-    { titulo: 'Contenedor lleno en patio', descripcion: 'El contenedor del patio norte está lleno y se requiere recolección.', categoria: 'Convivencia y servicios', estudiante: 'luis@foro.com', estado: 'pendiente' }
+    { titulo: 'Proyector sin señal en aula 101', descripcion: 'El proyector del aula 101 no recibe señal al conectar una computadora.', categoria: 'Equipos de cómputo y redes', estudiante: 'ana@foro.com', estado: 'en_proceso', ubicacion: 'Edificio A, aula 101' },
+    { titulo: 'Sillas dañadas en el salón B', descripcion: 'Hay varias sillas con tornillos flojos en el salón B y requieren mantenimiento.', categoria: 'Mantenimiento de mesas y sillas', estudiante: 'luis@foro.com', estado: 'resuelto', ubicacion: 'Edificio B, salón B' },
+    { titulo: 'Fuga de agua cerca de biblioteca', descripcion: 'Se observa una fuga de agua en el pasillo que conecta con la biblioteca.', categoria: 'Biblioteca', estudiante: 'sofia@foro.com', estado: 'resuelto', ubicacion: 'Pasillo de biblioteca' },
+    { titulo: 'Luminaria fundida en aula 204', descripcion: 'Una de las luminarias del aula 204 está fundida y el espacio queda oscuro.', categoria: 'Aulas e infraestructura', estudiante: 'ana@foro.com', estado: 'pendiente', ubicacion: 'Edificio A, aula 204' },
+    { titulo: 'Limpieza pendiente en baños', descripcion: 'Los baños del edificio central necesitan limpieza y reposición de jabón.', categoria: 'Baños y limpieza', estudiante: 'luis@foro.com', estado: 'en_proceso', ubicacion: 'Edificio central, planta baja' },
+    { titulo: 'Red wifi inestable en cafetería', descripcion: 'La conexión wifi se interrumpe con frecuencia en la zona de cafetería.', categoria: 'Equipos de cómputo y redes', estudiante: 'sofia@foro.com', estado: 'pendiente', ubicacion: 'Cafetería' },
+    { titulo: 'Mesa rota en laboratorio', descripcion: 'Una mesa de trabajo del laboratorio tiene una pata rota y no es segura.', categoria: 'Mantenimiento de mesas y sillas', estudiante: 'ana@foro.com', estado: 'resuelto', ubicacion: 'Laboratorio de ciencias' },
+    { titulo: 'Contenedor lleno en patio', descripcion: 'El contenedor del patio norte está lleno y se requiere recolección.', categoria: 'Convivencia y servicios', estudiante: 'luis@foro.com', estado: 'pendiente', ubicacion: 'Patio norte' }
 ];
 
 const textosComentarios = [
     'Gracias por reportarlo; vamos a dar seguimiento.',
     'Ya se compartió el caso con el área responsable.',
     '¿Podrían confirmar si el problema continúa?'
+];
+
+const votosDeEjemplo = [
+    { reporte: 'Proyector sin señal en aula 101', usuarios: ['luis@foro.com', 'sofia@foro.com'] },
+    { reporte: 'Sillas dañadas en el salón B', usuarios: ['ana@foro.com', 'sofia@foro.com'] },
+    { reporte: 'Luminaria fundida en aula 204', usuarios: ['luis@foro.com'] }
+];
+
+const cambiosDeEjemplo = [
+    {
+        reporte: 'Proyector sin señal en aula 101',
+        estadoAnterior: 'pendiente',
+        estadoNuevo: 'en_proceso'
+    },
+    {
+        reporte: 'Sillas dañadas en el salón B',
+        estadoAnterior: 'en_proceso',
+        estadoNuevo: 'resuelto'
+    }
 ];
 
 async function asegurarUsuario({ nombre, correo, password, rol }) {
@@ -67,7 +86,7 @@ async function main() {
         });
     }
 
-    await asegurarUsuario({
+    const administrador = await asegurarUsuario({
         nombre: 'Administrador Demo',
         correo: 'admin@foro.com',
         password: process.env.ADMIN_PASSWORD,
@@ -82,6 +101,7 @@ async function main() {
         });
     }
 
+    const reportesPorTitulo = {};
     for (const [indice, datos] of datosReportes.entries()) {
         const usuario = estudiantesPorCorreo[datos.estudiante];
         const existente = await prisma.reporte.findFirst({
@@ -93,11 +113,13 @@ async function main() {
             descripcion: datos.descripcion,
             categoriaId: categoriasPorNombre[datos.categoria].id,
             usuarioId: usuario.id,
-            estado: datos.estado
+            estado: datos.estado,
+            ubicacion: datos.ubicacion
         };
         const reporte = existente
             ? await prisma.reporte.update({ where: { id: existente.id }, data: contenido })
             : await prisma.reporte.create({ data: contenido });
+        reportesPorTitulo[datos.titulo] = reporte;
 
         const comentarista = estudiantesPorCorreo[estudiantes[(indice + 1) % estudiantes.length].correo];
         const texto = textosComentarios[indice % textosComentarios.length];
@@ -112,7 +134,42 @@ async function main() {
         }
     }
 
-    console.log('Seed completado: categorías, administrador, estudiantes, reportes y comentarios de demostración.');
+    for (const { reporte: titulo, usuarios } of votosDeEjemplo) {
+        const reporte = reportesPorTitulo[titulo];
+        for (const correo of usuarios) {
+            const usuario = estudiantesPorCorreo[correo];
+            await prisma.voto.upsert({
+                where: { reporteId_usuarioId: { reporteId: reporte.id, usuarioId: usuario.id } },
+                update: {},
+                create: { reporteId: reporte.id, usuarioId: usuario.id }
+            });
+        }
+    }
+
+    for (const cambio of cambiosDeEjemplo) {
+        const reporte = reportesPorTitulo[cambio.reporte];
+        const existente = await prisma.historialEstado.findFirst({
+            where: {
+                reporteId: reporte.id,
+                usuarioId: administrador.id,
+                estadoAnterior: cambio.estadoAnterior,
+                estadoNuevo: cambio.estadoNuevo
+            },
+            select: { id: true }
+        });
+        if (!existente) {
+            await prisma.historialEstado.create({
+                data: {
+                    reporteId: reporte.id,
+                    usuarioId: administrador.id,
+                    estadoAnterior: cambio.estadoAnterior,
+                    estadoNuevo: cambio.estadoNuevo
+                }
+            });
+        }
+    }
+
+    console.log('Seed completado: categorías, usuarios, reportes, comentarios, votos e historial de estados.');
 }
 
 main()

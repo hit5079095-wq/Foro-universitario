@@ -80,13 +80,17 @@ Authorization: Bearer {{adminToken}}
 ### Listar reportes con filtros y paginación
 GET {{baseUrl}}/api/reportes?categoriaId=1&estado=pendiente&pagina=1&limite=10&q=aula&orden=mas_comentados&usuarioId=1
 
+### Listar reportes por ubicación y apoyos
+GET {{baseUrl}}/api/reportes?ubicacion=aula&orden=mas_apoyados&pagina=1&limite=10
+
 ### El límite superior a 50 se ajusta a 50
 GET {{baseUrl}}/api/reportes?pagina=1&limite=100
 
-### Consultar detalle de reporte y comentarios
+### Consultar detalle de reporte y comentarios (con token incluye yaVote)
 GET {{baseUrl}}/api/reportes/{{reporteId}}
+Authorization: Bearer {{token}}
 
-### Crear reporte (categoriaId también acepta "1" de un formulario)
+### Crear reporte con ubicación e imagen
 POST {{baseUrl}}/api/reportes
 Authorization: Bearer {{token}}
 Content-Type: application/json
@@ -94,18 +98,37 @@ Content-Type: application/json
 {
   "titulo": "Mesa dañada en el aula",
   "descripcion": "Una mesa tiene una pata rota y requiere reparación.",
-  "categoriaId": "1"
+  "categoriaId": "1",
+  "ubicacion": "Edificio A, aula 101",
+  "imagenUrl": "https://example.com/mesa-danada.jpg"
 }
 
-### Editar reporte propio
+### Editar ubicación e imagen del reporte propio
 PUT {{baseUrl}}/api/reportes/{{reporteId}}
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
   "titulo": "Mesa dañada en el aula 101",
-  "descripcion": "La mesa sigue rota y requiere reparación."
+  "descripcion": "La mesa sigue rota y requiere reparación.",
+  "ubicacion": "Edificio A, aula 101",
+  "imagenUrl": "https://example.com/mesa-danada-actualizada.jpg"
 }
+
+### Registrar voto ("a mí también me pasa")
+POST {{baseUrl}}/api/reportes/{{reporteId}}/votos
+Authorization: Bearer {{token}}
+
+### Repetir el POST anterior debe responder 409
+POST {{baseUrl}}/api/reportes/{{reporteId}}/votos
+Authorization: Bearer {{token}}
+
+### Quitar voto
+DELETE {{baseUrl}}/api/reportes/{{reporteId}}/votos
+Authorization: Bearer {{token}}
+
+### Historial de estados (público)
+GET {{baseUrl}}/api/reportes/{{reporteId}}/historial
 
 ### Cambiar estado del reporte (administrador o autor)
 PATCH {{baseUrl}}/api/reportes/{{reporteId}}/estado
@@ -149,8 +172,18 @@ Authorization: Bearer {{token}}
 GET {{baseUrl}}/api/usuarios
 Authorization: Bearer {{adminToken}}
 
+### Cambiar rol de otro usuario (administrador)
+PATCH {{baseUrl}}/api/usuarios/{{usuarioId}}/rol
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "rol": "estudiante"
+}
+
 ### Reportes de un usuario
 GET {{baseUrl}}/api/usuarios/{{usuarioId}}/reportes?pagina=1&limite=10
+Authorization: Bearer {{token}}
 
 ### Estadísticas
 GET {{baseUrl}}/api/estadisticas

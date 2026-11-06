@@ -18,34 +18,42 @@ model Categoria {
 }
 
 model Usuario {
-  id           Int          @id @default(autoincrement())
-  nombre       String
-  correo       String       @unique(map: "usuarios_correo_unique")
-  passwordHash String       @map("password_hash")
-  rol          String       @default("estudiante")
-  creadoEn     DateTime     @default(now()) @map("creado_en")
-  reportes     Reporte[]
-  comentarios  Comentario[]
+  id               Int               @id @default(autoincrement())
+  nombre           String
+  correo           String            @unique(map: "usuarios_correo_unique")
+  passwordHash     String            @map("password_hash")
+  rol              String            @default("estudiante")
+  creadoEn         DateTime          @default(now()) @map("creado_en")
+  reportes         Reporte[]
+  comentarios      Comentario[]
+  votos            Voto[]
+  historialEstados HistorialEstado[]
 
   @@map("usuarios")
 }
 
 model Reporte {
-  id          Int          @id @default(autoincrement())
-  titulo      String
-  descripcion String
-  categoriaId Int          @map("categoria_id")
-  usuarioId   Int          @map("usuario_id")
+  id               Int               @id @default(autoincrement())
+  titulo           String
+  descripcion      String
+  categoriaId      Int               @map("categoria_id")
+  usuarioId        Int               @map("usuario_id")
   // Valores permitidos: pendiente, en_proceso, resuelto.
-  estado      String       @default("pendiente")
-  creadoEn    DateTime     @default(now()) @map("creado_en")
-  categoria   Categoria    @relation(fields: [categoriaId], references: [id])
-  usuario     Usuario      @relation(fields: [usuarioId], references: [id])
-  comentarios Comentario[]
+  estado           String            @default("pendiente")
+  creadoEn         DateTime          @default(now()) @map("creado_en")
+  ubicacion        String?
+  imagenUrl        String?           @map("imagen_url")
+  actualizadoEn    DateTime          @default(now()) @updatedAt @map("actualizado_en")
+  categoria        Categoria         @relation(fields: [categoriaId], references: [id])
+  usuario          Usuario           @relation(fields: [usuarioId], references: [id])
+  comentarios      Comentario[]
+  votos            Voto[]
+  historialEstados HistorialEstado[]
 
   @@index([categoriaId], map: "reportes_categoria_id_idx")
   @@index([usuarioId], map: "reportes_usuario_id_idx")
   @@index([creadoEn], map: "reportes_creado_en_idx")
+  @@index([estado], map: "reportes_estado_idx")
   @@map("reportes")
 }
 
@@ -61,4 +69,32 @@ model Comentario {
   @@index([reporteId, creadoEn], map: "comentarios_reporte_id_creado_en_idx")
   @@index([usuarioId], map: "comentarios_usuario_id_idx")
   @@map("comentarios")
+}
+
+model Voto {
+  id        Int      @id @default(autoincrement())
+  reporteId Int      @map("reporte_id")
+  usuarioId Int      @map("usuario_id")
+  creadoEn  DateTime @default(now()) @map("creado_en")
+  reporte   Reporte  @relation(fields: [reporteId], references: [id], onDelete: Cascade)
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([reporteId, usuarioId], map: "votos_reporte_id_usuario_id_unique")
+  @@index([usuarioId], map: "votos_usuario_id_idx")
+  @@map("votos")
+}
+
+model HistorialEstado {
+  id             Int      @id @default(autoincrement())
+  reporteId      Int      @map("reporte_id")
+  usuarioId      Int      @map("usuario_id")
+  estadoAnterior String   @map("estado_anterior")
+  estadoNuevo    String   @map("estado_nuevo")
+  creadoEn       DateTime @default(now()) @map("creado_en")
+  reporte        Reporte  @relation(fields: [reporteId], references: [id], onDelete: Cascade)
+  usuario        Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([reporteId, creadoEn], map: "historial_estados_reporte_id_creado_en_idx")
+  @@index([usuarioId], map: "historial_estados_usuario_id_idx")
+  @@map("historial_estados")
 }

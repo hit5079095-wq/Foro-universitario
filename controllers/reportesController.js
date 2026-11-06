@@ -2,27 +2,40 @@ const prisma = require('../lib/prisma');
 const { obtenerIdPositivo, obtenerLimite, responderIdInvalido } = require('./validaciones');
 
 const ESTADOS_PERMITIDOS = ['pendiente', 'en_proceso', 'resuelto'];
-const ORDENAMIENTOS = ['recientes', 'antiguos', 'mas_comentados'];
+const ORDENAMIENTOS = ['recientes', 'antiguos', 'mas_comentados', 'mas_apoyados'];
 
-const relacionesReporte = {
-    categoria: { select: { id: true, nombre: true } },
-    usuario: { select: { nombre: true } },
-    _count: { select: { comentarios: true } }
-};
+function relacionesReporte(usuarioId) {
+    return {
+        categoria: { select: { id: true, nombre: true } },
+        usuario: { select: { nombre: true } },
+        _count: { select: { comentarios: true, votos: true } },
+        ...(usuarioId ? { votos: { where: { usuarioId }, select: { id: true } } } : {})
+    };
+}
 
 function serializarReporte(reporte) {
-    return {
+    const serializado = {
         id: reporte.id,
         titulo: reporte.titulo,
         descripcion: reporte.descripcion,
         categoriaId: reporte.categoriaId,
+        ubicacion: reporte.ubicacion,
+        imagenUrl: reporte.imagenUrl,
         categoria: reporte.categoria,
         usuarioId: reporte.usuarioId,
         autor: reporte.usuario.nombre,
         estado: reporte.estado,
         creadoEn: reporte.creadoEn,
-        totalComentarios: reporte._count.comentarios
+        actualizadoEn: reporte.actualizadoEn,
+        totalComentarios: reporte._count.comentarios,
+        totalVotos: reporte._count.votos ?? 0
     };
+
+    if (Array.isArray(reporte.votos)) {
+        serializado.yaVote = reporte.votos.length > 0;
+    }
+
+    return serializado;
 }
 
 async function listar(req, res, next) {
@@ -44,6 +57,7 @@ async function listarConFiltro(req, res, next, filtroExtra) {
     const usuarioId = req.query.usuarioId === undefined
         ? undefined
         : obtenerIdPositivo(req.query.usuarioId);
+    const ubicacion = req.query.ubicacion;
     const q = req.query.q;
     const orden = req.query.orden === undefined ? 'recientes' : req.query.orden;
 
@@ -63,6 +77,9 @@ async function listarConFiltro(req, res, next, filtroExtra) {
     }
     if (q !== undefined && typeof q !== 'string') {
         return res.status(400).json({ status: 'error', message: 'El parámetro q debe ser texto', data: null });
+    }
+    if (ubicacion !== undefined && typeof ubicacion !== 'string') {
+        return res.status(400).json({ status: 'error', message: 'El parámetro ubicacion debe ser texto', data: null });
     }
     if (!ORDENAMIENTOS.includes(orden)) {
         return res.status(400).json({
@@ -84,6 +101,9 @@ async function listarConFiltro(req, res, next, filtroExtra) {
         ...(categoriaId === undefined ? {} : { categoriaId }),
         ...(usuarioId === undefined ? {} : { usuarioId }),
         ...(req.query.estado === undefined ? {} : { estado: req.query.estado }),
+        ...(ubicacion === undefined || !ubicacion.trim() ? {} : {
+            ubicacion: { contains: ubicacion.trim(), mode: 'insensitive' }
+        }),
         ...(q === undefined || !q.trim() ? {} : {
             OR: [
                 { titulo: { contains: q.trim(), mode: 'insensitive' } },
@@ -96,14 +116,16 @@ async function listarConFiltro(req, res, next, filtroExtra) {
         ? [{ creadoEn: 'asc' }, { id: 'asc' }]
         : orden === 'mas_comentados'
             ? [{ comentarios: { _count: 'desc' } }, { creadoEn: 'desc' }, { id: 'desc' }]
-            : [{ creadoEn: 'desc' }, { id: 'desc' }];
+            : orden === 'mas_apoyados'
+                ? [{ votos: { _count: 'desc' } }, { creadoEn: 'desc' }, { id: 'desc' }]
+                : [{ creadoEn: 'desc' }, { id: 'desc' }];
 
     try {
         const [total, reportes] = await prisma.$transaction([
             prisma.reporte.count({ where }),
             prisma.reporte.findMany({
                 where,
-                include: relacionesReporte,
+                include: relacionesReporte(req.usuario?.id),
                 orderBy,
                 skip: (pagina - 1) * limite,
                 take: limite
@@ -132,7 +154,7 @@ async function obtener(req, res, next) {
         const reporte = await prisma.reporte.findUnique({
             where: { id },
             include: {
-                ...relacionesReporte,
+                ...relacionesReporte(req.usuario?.id),
                 comentarios: {
                     orderBy: [{ creadoEn: 'asc' }, { id: 'asc' }],
                     include: { usuario: { select: { nombre: true } } }
@@ -193,9 +215,11 @@ async function crear(req, res, next) {
                 titulo: titulo.trim(),
                 descripcion: descripcion.trim(),
                 categoriaId: idCategoria,
-                usuarioId: req.usuario.id
+                usuarioId: req.usuario.id,
+                ubicacion: req.body.ubicacion,
+                imagenUrl: req.body.imagenUrl
             },
-            include: relacionesReporte
+            include: relacionesReporte(req.usuario.id)
         });
 
         return res.status(201).json({
@@ -237,8 +261,13 @@ async function editar(req, res, next) {
 
         const actualizado = await prisma.reporte.update({
             where: { id },
-            data: { titulo: titulo.trim(), descripcion: descripcion.trim() },
-            include: relacionesReporte
+            data: {
+                titulo: titulo.trim(),
+                descripcion: descripcion.trim(),
+                ...(Object.hasOwn(req.body, 'ubicacion') ? { ubicacion: req.body.ubicacion } : {}),
+                ...(Object.hasOwn(req.body, 'imagenUrl') ? { imagenUrl: req.body.imagenUrl } : {})
+            },
+            include: relacionesReporte(req.usuario.id)
         });
 
         return res.json({ status: 'success', message: 'Reporte actualizado', data: serializarReporte(actualizado) });
@@ -261,15 +290,39 @@ async function actualizarEstado(req, res, next) {
     }
 
     try {
-        const reporteExistente = await prisma.reporte.findUnique({
-            where: { id },
-            select: { usuarioId: true }
+        const resultado = await prisma.$transaction(async (tx) => {
+            const reporteExistente = await tx.reporte.findUnique({
+                where: { id },
+                select: { usuarioId: true, estado: true }
+            });
+            if (!reporteExistente) return { tipo: 'no-encontrado' };
+            if (reporteExistente.usuarioId !== req.usuario.id && req.usuario.rol !== 'admin') {
+                return { tipo: 'prohibido' };
+            }
+
+            const actualizado = await tx.reporte.update({
+                where: { id },
+                data: { estado },
+                include: relacionesReporte(req.usuario.id)
+            });
+            if (reporteExistente.estado !== estado) {
+                await tx.historialEstado.create({
+                    data: {
+                        reporteId: id,
+                        usuarioId: req.usuario.id,
+                        estadoAnterior: reporteExistente.estado,
+                        estadoNuevo: estado
+                    }
+                });
+            }
+
+            return { tipo: 'actualizado', reporte: actualizado };
         });
 
-        if (!reporteExistente) {
+        if (resultado.tipo === 'no-encontrado') {
             return res.status(404).json({ status: 'error', message: 'Reporte no encontrado', data: null });
         }
-        if (reporteExistente.usuarioId !== req.usuario.id && req.usuario.rol !== 'admin') {
+        if (resultado.tipo === 'prohibido') {
             return res.status(403).json({
                 status: 'error',
                 message: 'No puedes cambiar el estado de un reporte ajeno',
@@ -277,16 +330,10 @@ async function actualizarEstado(req, res, next) {
             });
         }
 
-        const actualizado = await prisma.reporte.update({
-            where: { id },
-            data: { estado },
-            include: relacionesReporte
-        });
-
         return res.json({
             status: 'success',
             message: 'Estado actualizado',
-            data: serializarReporte(actualizado)
+            data: serializarReporte(resultado.reporte)
         });
     } catch (error) {
         return next(error);
@@ -325,4 +372,41 @@ async function eliminar(req, res, next) {
     }
 }
 
-module.exports = { listar, listarPorUsuario, obtener, crear, editar, actualizarEstado, eliminar };
+async function historial(req, res, next) {
+    const id = obtenerIdPositivo(req.params.id);
+    if (!id) return responderIdInvalido(res, 'del reporte');
+
+    try {
+        const reporte = await prisma.reporte.findUnique({
+            where: { id },
+            select: { id: true }
+        });
+        if (!reporte) {
+            return res.status(404).json({ status: 'error', message: 'Reporte no encontrado', data: null });
+        }
+
+        const historialEstados = await prisma.historialEstado.findMany({
+            where: { reporteId: id },
+            include: { usuario: { select: { nombre: true } } },
+            orderBy: [{ creadoEn: 'desc' }, { id: 'desc' }]
+        });
+
+        return res.json({
+            status: 'success',
+            message: 'Historial de estados obtenido',
+            data: historialEstados.map((cambio) => ({
+                id: cambio.id,
+                reporteId: cambio.reporteId,
+                usuarioId: cambio.usuarioId,
+                usuario: cambio.usuario.nombre,
+                estadoAnterior: cambio.estadoAnterior,
+                estadoNuevo: cambio.estadoNuevo,
+                creadoEn: cambio.creadoEn
+            }))
+        });
+    } catch (error) {
+        return next(error);
+    }
+}
+
+module.exports = { listar, listarPorUsuario, obtener, crear, editar, actualizarEstado, eliminar, historial };
